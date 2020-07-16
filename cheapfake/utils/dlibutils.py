@@ -128,7 +128,7 @@ def chunk_elements(elements, length=1):
 
 
 def prepare_payload(
-    chunked_filenames, chunked_framenames, detector, predictor, save_path
+    chunked_filenames, chunked_framenames, detector, predictor, save_path, rgb=True
 ):
     """
     Prepares a payload for feeding into the multiprocessing operation.
@@ -147,6 +147,7 @@ def prepare_payload(
             "detector": detector,
             "predictor": predictor,
             "save_prefix": save_path,
+            "rgb": rgb,
         }
         payloads.append(data)
 
@@ -217,14 +218,18 @@ def process_images(payload):
                     payload["save_prefix"],
                     "cropped_frames/{}".format(payload["framenames"][k]),
                 ),
-                cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
+                cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                if payloads["rgb"] is False
+                else image,
             )
             cv2.imwrite(
                 os.path.join(
                     payload["save_prefix"],
                     "lip_frames/{}".format(payload["framenames"][k]),
                 ),
-                cv2.cvtColor(cropped_lips, cv2.COLOR_BGR2RGB),
+                cv2.cvtColor(cropped_lips, cv2.COLOR_BGR2RGB)
+                if payloads["rgb"] is False
+                else image,
             )
 
         print("Processed file {}".format(filename))
