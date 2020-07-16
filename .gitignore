@@ -1,0 +1,27 @@
+__pycache__/
+  
+# Temp files
+*~
+~*
+.*~
+\#*
+.#*
+*#
+
+# Build
+eggs/
+.eggs/
+wheels/
+*.egg-info/
+*.egg
+.cache
+
+# Mac OS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Video files
+*.mp4
+
+*.dat
