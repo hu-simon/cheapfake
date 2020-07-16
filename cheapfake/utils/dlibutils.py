@@ -218,9 +218,9 @@ def process_images(payload):
                     payload["save_prefix"],
                     "cropped_frames/{}".format(payload["framenames"][k]),
                 ),
-                cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                cv2.cvtColor(cropped_image, cv2.COLOR_BGR2RGB)
                 if payload["rgb"] is False
-                else image,
+                else cropped_image,
             )
             cv2.imwrite(
                 os.path.join(
@@ -229,7 +229,7 @@ def process_images(payload):
                 ),
                 cv2.cvtColor(cropped_lips, cv2.COLOR_BGR2RGB)
                 if payload["rgb"] is False
-                else image,
+                else cropped_lips,
             )
 
         print("Processed file {}".format(filename))
