@@ -7,7 +7,7 @@ from tqdm import tqdm
 import cheapfake.utils.dlibutils as dlibutils
 
 
-def to_frames(path_to_video, path_to_frames, extention="png", debug=False):
+def to_frames(path_to_video, path_to_frames, extension="png", debug=False):
     """
     Converts video to frames.
     """
