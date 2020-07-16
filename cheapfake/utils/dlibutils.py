@@ -219,7 +219,7 @@ def process_images(payload):
                     "cropped_frames/{}".format(payload["framenames"][k]),
                 ),
                 cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                if payloads["rgb"] is False
+                if payload["rgb"] is False
                 else image,
             )
             cv2.imwrite(
@@ -228,7 +228,7 @@ def process_images(payload):
                     "lip_frames/{}".format(payload["framenames"][k]),
                 ),
                 cv2.cvtColor(cropped_lips, cv2.COLOR_BGR2RGB)
-                if payloads["rgb"] is False
+                if payload["rgb"] is False
                 else image,
             )
 
