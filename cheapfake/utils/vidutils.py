@@ -22,7 +22,8 @@ def to_frames(path_to_video, path_to_frames, extension="png", debug=False):
             cv2.imwrite(
                 os.path.join(
                     path_to_frames, "frame{}.{}".format(frame_count, extension)
-                )
+                ),
+                image,
             )
             success, image = vidcap.read()
             frame_count += 1
