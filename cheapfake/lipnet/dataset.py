@@ -290,3 +290,132 @@ def create_dataloader(
     )
 
     return dataloader
+
+
+''' Uncomment this portion of the code when you are ready to create the pipeline for the entire network.
+
+class BasicDataset(torch.utils.data.Dataset):
+    """
+    Implements a Dataset that only contains the video frames (no annotations) ans is used for evaluating LipNet on "in the wild" data.
+
+    Notes (to remove later)
+    -----------------------
+    * video_path should be the path to the subject (e.g. /Users/shu/Documents/Datasets/WildVideos/selina_meyers)
+    """
+
+    letters = [re.sub("\n", "", line) for line in open("alphabet.txt", "r")]
+
+    def __init__(self, video_path, video_padding, extension="jpg"):
+        """
+        Instantiates a BasicDataset object.
+
+        Parameters
+        ----------
+        video_path : str
+        video_padding : int
+        extension : str
+
+        Returns
+        -------
+        None
+        """
+        self.video_path = video_path
+        self.video_padding = video_padding
+
+        self.filenames = dlibutils.sort_list(
+            [
+                f
+                for f in glob.glob(
+                    os.path.join(self.video_path, "*.{}".format(extension))
+                )
+            ]
+        )
+        self.framenames = dlibutils.sort_list(
+            [f for f in os.listdir(self.video_path) if not f.startswith(".")]
+        )
+
+    def __len__(self):
+        """
+        Returns the length of the data.
+        
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            The length of the data, i.e. the number of data points.
+        """
+        return len(self.data)
+
+    def __getitem__(self, index):
+        """
+        Grabs the item, from the data, at location ``index``.
+
+        Parameters
+        ----------
+        index : int
+            The index of the entry to draw from the data.
+        
+        Returns
+        -------
+        item : dict
+            Dictionary containing the following items:
+            {
+                video : numpy.array instance
+                    Array containing the video data.
+                video_length : int
+                    The length of the video, in frames.
+            }
+        """
+        filename = self.filenames[index]
+        video = self._load_video(filename)
+
+    def _add_padding(self, tensor, length, axis=0):
+        """
+        Adds zero padding to a tensor.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor or numpy.array instance
+            The tensor or array that is to be zero-padded.
+        length : int
+            The amount of zero paddig to append to the tensor or array.
+        axis : int
+            The axis on which the zero padding is applied, by default 0.
+
+        Returns
+        -------
+        tensor : torch.Torch or numpy.array instance
+           The original tensor or array, with zero padding of length ``length``. 
+        """
+        tensor = [tensor[k] for k in range(tensor.shape[0])]
+        pad_shape = tensor[0].shape
+        for k in range(length - len(tensor)):
+            tensor.append(np.zeros(pad_shape))
+        tensor = np.stack(tensor, axis=axis)
+
+        return tensor
+
+    def _load_video(self, path):
+        """
+        Loads a video as an array.
+
+        Parameters
+        ----------
+        path : str
+            Path to the directory with the video.
+        
+        Returns
+        -------
+        arr : numpy.array instance
+            Array containing the video data.
+        """
+        # files = os.listdir(path)
+        pass
+
+    @staticmethod
+    def array_to_text(array, start_index, return_spaces=False, ctc_mode=False):
+        pass
+'''

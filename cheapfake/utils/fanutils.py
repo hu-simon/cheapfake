@@ -279,7 +279,47 @@ def predictions_from_heatmap(heatmaps, center=None, scale=None):
     predictions : torch.Tensor instance
         Tensor containing the (x, y)-coordinates of the features, extracted from the batch of N heatmaps. If the scale is provided, then these coordinates are in the original coordinate frame.
     """
-    raise NotImplementedError
+    max, idx = torch.max(
+        heatmaps.view(
+            heatmaps.size(0), heatmaps.size(1), heatmaps.size(2) * heatmaps.size(3)
+        ),
+        2,
+    )
+    idx += 1
+    predictions = idx.view(idx.size(0), idx.size(1), 1).repeat(1, 1, 2).float()
+    predictions[..., 0].apply_(lambda x: (x - 1) % heatmaps.size(3) + 1)
+    predictions[..., 1].add_(-1).div_(heatmaps.size(2)).floor_().add_(1)
+
+    for k in range(predictions.size(0)):
+        for l in range(predictions.size(1)):
+            heatmaps_ = heatmaps[k, l, :]
+            predictions_x = int(predictions[k, l, 0]) - 1
+            predictions_y = int(predictions[k, l, 1]) - 1
+            if (
+                predictions_x > 0
+                and predictions_x < 63
+                and preidctions_y > 0
+                and predictions_y < 63
+            ):
+                diff = torch.FloatTensor(
+                    [
+                        heatmaps_[predictions_y, predictions_x + 1]
+                        - heatmaps_[predictions_y, predictions_x - 1],
+                        heatmaps_[predictions_y + 1, predictions_x]
+                        - heatmaps_[predictions_y - 1, predictions_x],
+                    ]
+                )
+                predictions[k, l].add_(diff.sign_().mul_(0.25))
+
+    predictions.add_(-0.5)
+
+    predictions_original = torch.zeros(predictions.size())
+    if center is not None and scale is not None:
+        for k in range(heatmaps.size(0)):
+            for l in range(heatmaps.size(1)):
+                predictions_original[k, l] = affine_transformation(
+                    predictions[k, l], center, scale, heatmaps.size(2), True
+                )
 
 
 def apply_gaussian(

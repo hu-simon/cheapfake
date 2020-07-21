@@ -7,7 +7,7 @@ import dlib
 import random
 import numpy as np
 
-LIP_MARGIN = 0.5
+LIP_MARGIN = 0.2
 
 """
 To deal with the isssue of not having the iterator work, we may just have to create separate chunks...that is unfortunate.
@@ -125,6 +125,35 @@ def chunk_elements(elements, length=1):
     """
     for k in range(0, len(elements), length):
         yield elements[k : k + length]
+
+
+def chunk_elements_no_yield(elements, length=1):
+    """
+    Chunks an array-like object ``elements`` into ``length`` sized chunks.
+
+    This method directly returns the chunks, instead of yielding them.
+
+    Parameters
+    ----------
+    elements : array-like
+        An array-like object to be chunked into ``length`` sized chunks.
+    length : int, optional
+        The length of size chunk.
+
+    Returns
+    -------
+    chunk : array-like
+        An array-like object containing one chunk, of size ``length``, of ``elements``.
+
+    Notes
+    -----
+    You are not always guaranteed that the final chunk is the same size as the others, unless ``length`` times the number of chunks is exactly equal to ``len(elements)``. Exercise caution when using this function.
+    """
+    chunked_elements = list()
+    for k in range(0, len(elements), length):
+        chunked_elements.append(elements[k : k + length])
+
+    return chunked_elements
 
 
 def prepare_payload(

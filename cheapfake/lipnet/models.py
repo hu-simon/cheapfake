@@ -25,11 +25,15 @@ class LipNet(nn.Module):
         self.pool1 = nn.MaxPool3d((1, 2, 2), (1, 2, 2))
         self.conv2 = nn.Conv3d(32, 64, (3, 5, 5), (1, 1, 1), (1, 2, 2))
         self.pool2 = nn.MaxPool3d((1, 2, 2), (1, 2, 2))
-        self.conv3 = nn.Conv3d(64, 96, (3, 3, 3), (1, 1, 1), (1, 1, 1))
+        # Change the below number back to (64, 96, ...) since we had to modify it for the batch size.
+        # self.conv3 = nn.Conv3d(64, 96, (3, 3, 3), (1, 1, 1), (1, 1, 1))
+        self.conv3 = nn.Conv3d(64, 60, (3, 3, 3), (1, 1, 1), (1, 1, 1))
         self.pool3 = nn.MaxPool3d((1, 2, 2), (1, 2, 2))
         self.fully_connected = nn.Linear(512, 27 + 1)
 
-        self.gru1 = nn.GRU(96 * 4 * 8, 256, 1, bidirectional=True)
+        # Change the below number back to (96 * 4 * 8, ...) since we had to modify it for the batch size.
+        # self.gru1 = nn.GRU(96 * 4 * 8, 256, 1, bidirectional=True)
+        self.gru1 = nn.GRU(60 * 4 * 8, 256, 1, bidirectional=True)
         self.gru2 = nn.GRU(512, 256, 1, bidirectional=True)
 
         self.relu = nn.ReLU(inplace=True)
@@ -54,7 +58,9 @@ class LipNet(nn.Module):
         nn.init.constant_(self.fully_connected.bias, 0)
 
         for gru in (self.gru1, self.gru2):
-            stddev = math.sqrt(2 / (96 * 3 * 6 + 256))
+            # Change the below number back to (96 * 3 * 6 + 256) since we had to modify it for the batch size.
+            # stddev = math.sqrt(2 / (96 * 3 * 6 + 256))
+            stddev = math.sqrt(2 / 60 * 3 * 6 + 256)
             for k in range(0, 256 * 3, 256):
                 nn.init.uniform_(
                     gru.weight_ih_l0[k : k + 256],
