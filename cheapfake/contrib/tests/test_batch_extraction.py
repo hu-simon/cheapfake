@@ -136,7 +136,7 @@ def test_four_26():
         ]
     )
     dh, dw = frames_resized[0].shape[0] / 640.0, frames_resized[0].shape[1] / 640.0
-    frames_resized = np.einsum("ijkl->iljk", frames_resized)
+    frames_resized = torch.Tensor(np.einsum("ijkl->iljk", frames_resized)).cuda()
 
     framesproc = video_processor.FramesProcessor(verbose=True)
 
@@ -157,4 +157,4 @@ if __name__ == "__main__":
     # test_one()
     # test_two()
     # test_three()
-    test_four()
+    test_four_26()
