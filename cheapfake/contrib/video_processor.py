@@ -4,16 +4,12 @@ import warnings
 
 import cv2
 import torch
+import librosa
 import numpy as np
 import moviepy.editor
 import face_alignment
-
-
-"""
-The audio extraction functions need some sort of testing!
-
-Need to enforce some sort of color flag so that the images are in RGB format.
-"""
+import librosa.display
+import matplotlib.pyplot as plt
 
 
 class VideoFileProcessor:
@@ -433,6 +429,10 @@ class VideoFileProcessor:
         audio_signal : numpy.ndarray instance
             Numpy array containing the audio samples from the video, located at ``indices``.
 
+        Notes
+        -----
+        This function is not well-tested. Be cautious with use.
+
         """
         audio_signal = self._extract_all_audio(
             video_path=video_path, sample_rate=sample_rate
@@ -524,7 +524,7 @@ class FramesProcessor:
             Numpy array containing the facial landmarks in ``frame``. Note that there may be multiple landmarks in the scenario where multiple face(s) are detected.
 
         """
-        if device is "cuda":
+        if device == "cuda":
             frame = torch.from_numpy(frame).cuda()
         else:
             frame = torch.from_numpy(frame)
@@ -589,7 +589,7 @@ class FramesProcessor:
             frames = np.einsum("ijkl->iljk", frames)
 
         batch = np.stack(frames)
-        if device is "cuda":
+        if device == "cuda":
             batch = torch.from_numpy(batch).cuda()
         else:
             batch = torch.from_numpy(batch)
@@ -605,3 +605,86 @@ class FramesProcessor:
 class AudioProcessor:
     """Helper class used for processing audio."""
 
+    def __init__(self, verbose=True):
+        """Instantiates a new AudioProcessor class.
+
+        Parameters
+        ----------
+        verbose : {True, False}, bool, optional
+            If True then verbose output is sent to the system console, by default True.
+        
+        """
+        self.verbose = verbose
+
+    def extract_spectrogram(
+        audio_signal, sample_rate=44100, return_log=True, return_torch=True
+    ):
+        """Extracts the spectrogram from the audio_signal. 
+
+        The output can either be in amplitude or dB, depending on ``return_log``.
+
+        Parameters
+        ----------
+        audio_signal : numpy.ndarray instance
+            The audio signal used to extract the spectrogram information.
+        sample_rate : int, optional
+            The sample rate of the audio signal, by default 44.1 kHz. If a float is passed as input, then it will be cast as an integer. If a non-integer or non-float input is passed as input, then the default audio sample rate is used.
+        return_log : {True, False}, bool, optional
+            If True then the output is the log-spectrogram, which is in dB units, by default True. Otherwise, the output is the spectrogram, which is in amplitude units. If a non-boolean input is passed then the default value is used.
+        return_torch : {True, False}, bool, optional
+            If True, then the output is converted to a torch.Tensor instance, by default True. If a non-boolean input is passed then the default value is used. 
+
+        Returns
+        -------
+        spectrogram : numpy.ndarray or torch.Tensor instance
+            The spectrogram, in amplitude or decibel units, of the audio signal returned as either a Numpy array or a Torch tensor.
+
+        """
+        # Handle invalid inputs.
+        if type(sample_rate) is float:
+            sample_rate = int(sample_rate)
+        if type(sample_rate) is not float or type(sample_rate) is not int:
+            sample_rate = 44100
+        if type(return_log) is not bool:
+            return_log = True
+        if type(return_torch) is not bool:
+            return_torch = True
+
+        spectrogram = librosa.feature.melspectrogram(y=audio_signal, sr=sample_rate)
+
+        if return_log:
+            spectrogram = librosa.amplitude_to_db(spectrogram, ref=np.max)
+
+        if return_torch:
+            spectrogram = torch.from_numpy(spectrogram)
+
+        return spectrogram
+
+    def plot_spectrogram(spectrogram, sample_rate=44100, show_colorbar=False):
+        """Plots the spectrogram of an audio signal, sampled at ``sample_rate`` Hz.
+
+        Parameters
+        ----------
+        spectrogram : numpy.ndarray or torch.Tensor instance
+            The spectrogram, in amplitude or decibel units, of the audio signal as either a Numpy array or a Torch tensor.
+        sample_rate : int, optional
+            The sample rate of the audio signal, by default 44.1 kHz. If a float is passed as input, then it will be cast as an integer. If a non-integer or non-float input is passed then the default audio sample rate is used.
+        show_colorbar : {False, True}, bool, optional
+            If True then a colorbar is shown next to the spectrogram, by default False. If a non-boolean input is passed then the default value is used.
+
+        """
+        if type(sample_rate) is float:
+            sample_rate = int(sample_rate)
+        if type(sample_rate) is not float or type(sample_rate) is not int:
+            sample_rate = 44100
+
+        if type(spectrogram) is torch.Tensor:
+            spectrogram = spectrogram.numpy()
+
+        plt.figure(figsize=(12, 4))
+        librosa.display.specshow(
+            spectrogram, sr=sample_rate, x_axis="time", y_axis="mel"
+        )
+        if show_colorbar:
+            plt.colorbar(format="%+02.0f dB")
+        plt.show()
