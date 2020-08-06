@@ -617,7 +617,7 @@ class AudioProcessor:
         self.verbose = verbose
 
     def extract_spectrogram(
-        audio_signal, sample_rate=44100, return_log=True, return_torch=True
+        self, audio_signal, sample_rate=44100, return_log=True, return_torch=True
     ):
         """Extracts the spectrogram from the audio_signal. 
 
@@ -660,7 +660,7 @@ class AudioProcessor:
 
         return spectrogram
 
-    def plot_spectrogram(spectrogram, sample_rate=44100, show_colorbar=False):
+    def plot_spectrogram(self, spectrogram, sample_rate=44100, show_colorbar=False):
         """Plots the spectrogram of an audio signal, sampled at ``sample_rate`` Hz.
 
         Parameters

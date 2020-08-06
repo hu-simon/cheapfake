@@ -27,7 +27,7 @@ def test_spectrogram_full_audio(video_path):
 
     """
     videofileprocessor = video_processor.VideoFileProcessor(verbose=True)
-    audioprocessor = video_processor.AudioProcessor
+    audioprocessor = video_processor.AudioProcessor(verbose=True)
     audio_signal = videofileprocessor._extract_all_audio(video_path=video_path)
 
     start_time = time.time()
@@ -51,7 +51,7 @@ def test_spectrogram_partial_audio(video_path):
 
     """
     videofileprocessor = video_processor.VideoFileProcessor(verbose=True)
-    audioprocessor = video_processor.AudioProcessor
+    audioprocessor = video_processor.AudioProcessor(verbose=True)
     audio_signal = videofileprocessor._extract_all_audio(video_path=video_path)
     audio_signal = audio_signal[:44100]
 
