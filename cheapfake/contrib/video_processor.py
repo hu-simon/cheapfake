@@ -470,108 +470,134 @@ class FramesProcessor:
         """
         self.verbose = verbose
 
-    def _extract_landmarks(self, model, frame, device="cpu"):
-        """Extracts landmarks for a single image, using the Face Alignment Network with the model parameters given by ``model``.
+    def _extract_landmarks(self, model, frame, channel_first=True):
+        """Extracts landmarks for a single image, using the Face Alignment Network.
 
-        Note that ``model`` encodes information about the face detection model.
+        Note that ``model`` encodes information about the face detection scheme.
 
         Parameters
         ----------
         model : face_alignment.FaceAlignment instance
             The model used for extracting the facial landmarks.
-        device : torch.device instance, optional
-            The device on which all computations are carried out.  
         frame : numpy.ndarray instance
-            Numpy array containing the image used for extracting facial landmarks.
-        
+            Numpy array containing the image used for extracting the facial landmarks.
+        channels_first : {True, False}, bool, optional
+            If True, then the input is assumed to take the shape ``(T, C, H, W)``, by default True. Otherwise, the input is assumed to take the shape ``(T, H, W, C)``. If a non-boolean input is sent, then ``channel_first`` defaults to True.
+
         Returns
         -------
-        landmarks : numpy.ndarray
-            Numpy array containing the facial landmarks in ``frame``. Note that the output may contain landmarks for multiple face(s), if they are detected.
-        
+        landmarks : list
+            List containing the facial landmarks in ``frame``. Note that the output may contain landmarks for multiple face(s), if they are detected. 
+
         """
+        if type(channels_first) is not bool:
+            channels_first = True
+
+        if channels_first is False:
+            frame = np.einsum("ijk->jki", frame)
+
         landmarks = model.get_landmarks_from_image(frame)
 
         return landmarks
 
-    def extract_landmarks(self, frame, device="cpu", detector="sfd"):
-        """Extract landmarks for a single image, using the Face Alignment Network with model parameters given by ``model``.
+    def extract_landmarks(
+        self, frame, channels_first=True, device="cpu", detector="sfd"
+    ):
+        """Extracts landmarks for a single image, using the Face Alignment Network.
 
-        Note that ``model`` encodes information about the face detection model.
+        Note that ``model`` encodes information about the face detection scheme. 
 
         Parameters
         ----------
         frame : numpy.ndarray instance
-            Numpy array containing the image used for extracting facial landmarks.
-        device : torch.device instance, optional
-            The device on which all computations are carried out.
-        detector : {"sfd", "dlib", "blazeface"}, str, optional
-            The face detection scheme to be used, by default "sfd". The three supported schemes are S3FD, DLib, and BlazeFace. If none of these options are sent as input, then the default scheme is used.
+            Numpy array containing the image used for extracting the facial landmarks.
+        channels_first : {True, False}, bool, optional
+            If True, then the input is assumed to take the shape ``(T, C, H, W)``, by default True. Otherwise, the input is assumed to take the shape ``(T, H, W, C)``. If a non-boolean input is sent, then ``channels_first`` defaults to True.
+        device : {"cpu", "cuda"}, str, optional
+            The device on which all computations are carried out, by default "cpu".
+        detector : {"sfd", "blazeface", "dlib"}, str, optional
+            The face detection scheme, by default "sfd". The three supported schemes are S3FD, BlazeFace, and DLib. If none of these options are sent as input, then the default scheme is used.
 
         Returns
         -------
-        landmarks : numpy.ndarray instance
+        landmarks : list
             Numpy array containing the facial landmarks in ``frame``. Note that there may be multiple landmarks in the scenario where multiple face(s) are detected.
 
         """
+        if device is "cuda":
+            frame = torch.from_numpy(frame).cuda()
+        else:
+            frame = torch.from_numpy(frame)
+
         model = face_alignment.FaceAlignment(
             face_alignment.LandmarksType._2D, device=device, face_detector=detector
         )
-        landmarks = self._extract_landmarks(model=model, frame=frame, device=device)
+        landmarks = self._extract_landmarks(
+            model=model, frame=frame, channels_first=channels_first
+        )
 
-        return landmarks
-
-    def _batch_extract_landmarks(self, model, frames, device="cpu"):
-        """Extracts a batch of facial landmarks from a batch of frames, using the Face Alignment Network with model parameters given by ``model``.
+    def _batch_extract_landmarks(self, model, frames):
+        """Extracts facial landmarks from a batch of frames, using the Face Alignment Network. 
 
         Note that ``model`` encodes information about the face detection model.
 
         Parameters
         ----------
         model : face_alignment.FaceAlignment instance
-            The model used for extracting the facial landmarks.
-        frames : torch.Tensor instance
-            Tensor containing the batch of frames used to extract facial landmarks.
-        device : torch.device instance, optional
-            Device on which all computations are carried out, by default "cpu".
-
+            The mode used for extracting the facial landmarks.
+        frames : list (of numpy.ndarray instances)
+            List containing the images used for extracting the facial landmarks.
+        
         Returns
         -------
-        batch_landmarks : numpy.ndarray instance
-            Numpy array containing the batch of facial features in ``frames``. Note that there may be multiple landmarks for each frame, in the scenario where multiple face(s) are detected.
-        
+        batch_landmarks : list
+            List containing the batch of facial features from ``frames``. Note that there may be multiple landmarks for each frame, in the scenario where multiple face(s) are detected.
+
         """
         batch_landmarks = model.get_landmarks_from_batch(frames)
 
         return batch_landmarks
 
-    def batch_extract_landmarks(self, frames, device="cpu", detector="sfd"):
-        """Extracts a batch of facial landmarks from a batch of frames, using the Face Alignment Network.
+    def batch_extract_landmarks(
+        self, frames, device="cpu", detector="sfd", channels_first=True
+    ):
+        """Extracts facial landmarks from a batch of frames, using the Face Alignment Network.
+
+        Note that ``model`` encodes information about the face detection model.
 
         Parameters
         ----------
-        frames : numpy.ndarray instance
-            Numpy array containing a batch of images used to extract facial landmarks.
-        device : torch.device
-            Device on which all computations are carried out, by default "cpu".
-        detector : {"sfd", "dlib", "blazeface"}, str, optional
-            The face detection scheme to be used, by default "sfd". The three supported schemes are S3FD, DLib, and BlazeFace. If none of these options are sent as input, then the default scheme is used.
+        frames : list (of numpy.ndarray instances)
+            List containing the images frames used to predict facial landmarks.
+        device : {"cpu", "cuda"}, str, optional
+            The device on which all computations are carried out, by default "cpu".
+        detector : {"sfd", "blazeface", "dlib"}, str, optional
+            The face detection scheme, by default "sfd". The three supported schemes are S3FD, BlazeFace, and DLib. If none of these options are sent as input, then the default scheme is used.
+        channels_first : {True, False}, bool, optional
+            If True, then the input is assumed to take the shape ``(T, C, H, W)``, by default True. Otherwise, the input is assumed to take the shapep ``(T, H, W, C)``. If a non-boolean input is sent, then ``channels_first`` defaults to True. 
 
         Returns
         -------
-        batch_landmarks : numpy.ndarray instance
-            Numpy array containing the batch of facial features in ``frames``. Note that there may be multiple landmarks for each frame, in the scenario where multiple face(s) are detected.
+        batch_landmarks : list
+            List containing the batch of facial features from ``frames``. Note that there may be multiple landmarks for frame, in the scenario where multiple face(s) are detected.
 
         """
+        if type(channels_first) is not bool:
+            channels_first = True
+
+        if channels_first is False:
+            frames = np.einsum("ijkl->iljk", frames)
+
         batch = np.stack(frames)
-        batch = torch.Tensor(batch)
-        # pythonbatch = batch.transpose(0, 3, 1, 2)
+        if device is "cuda":
+            batch = torch.from_numpy(batch).cuda()
+        else:
+            batch = torch.from_numpy(batch)
+
         model = face_alignment.FaceAlignment(
             face_alignment.LandmarksType._2D, device=device, face_detector=detector
         )
-        batch_landmarks = self._batch_extract_landmarks(
-            model=model, frames=batch, device=device
-        )
+        batch_landmarks = self._batch_extract_landmarks(model=model, frames=batch)
 
         return batch_landmarks
 
