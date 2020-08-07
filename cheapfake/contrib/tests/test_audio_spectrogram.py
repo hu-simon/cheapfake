@@ -33,7 +33,7 @@ def test_spectrogram_full_audio(video_path):
     start_time = time.time()
     spectrogram = audioprocessor.extract_spectrogram(
         audio_signal=audio_signal,
-        sample_rate=44100,
+        sample_rate=16000,
         return_log=True,
         return_torch=False,
     )
@@ -42,7 +42,7 @@ def test_spectrogram_full_audio(video_path):
 
     # Plot the spectrogram.
     audioprocessor.plot_spectrogram(
-        spectrogram=spectrogram, sample_rate=44100, show_colorbar=True
+        spectrogram=spectrogram, sample_rate=16000, show_colorbar=True
     )
 
 
@@ -53,21 +53,22 @@ def test_spectrogram_partial_audio(video_path):
     videofileprocessor = video_processor.VideoFileProcessor(verbose=True)
     audioprocessor = video_processor.AudioProcessor(verbose=True)
     audio_signal = videofileprocessor._extract_all_audio(video_path=video_path)
-    audio_signal = audio_signal[:44100]
+    audio_signal = audio_signal[:16000]
 
     start_time = time.time()
     spectrogram = audioprocessor.extract_spectrogram(
         audio_signal=audio_signal,
-        sample_rate=441000,
+        sample_rate=16000,
         return_log=True,
         return_torch=False,
     )
     end_time = time.time()
     print("The entire operation took {} seconds.".format(end_time - start_time))
+    print("The shape of the partial spectrogram is {}.".format(spectrogram.shape))
 
     # Plot the spectrogram.
     audioprocessor.plot_spectrogram(
-        spectrogram=spectrogram, sample_rate=44100, show_colorbar=True
+        spectrogram=spectrogram, sample_rate=16000, show_colorbar=True
     )
 
 

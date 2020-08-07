@@ -11,6 +11,12 @@ import face_alignment
 import librosa.display
 import matplotlib.pyplot as plt
 
+"""
+Have not tested the STFT stuff.
+
+Need to also add support for a dataloader object. But this should probably be put in a separate .py file.
+"""
+
 
 class VideoFileProcessor:
     """Helper class for processing video files."""
@@ -223,75 +229,6 @@ class VideoFileProcessor:
 
         return frames
 
-    ''' Deprecated in favor of more recently updated function that calls private function. 
-    def extract_frames_from_indices(self, video_path, indices=None, channel_first=True):
-        """Extracts frames, according to ``indices``, from a video and returns it as a Numpy array.
-
-        If ``channel_first`` is True then the shape of the output is ``(T, C, H, W)`` and ``(T, H, W, C)`` otherwise. Here T represents time, C represents channel, H represents height, and W represents width.
-
-        Parameters
-        ----------
-        video_path : str
-            The absolute path to the video file.
-        indices : array-like, optional
-            Array-like object containing the indices of the frames to extract, by default None. If None, then ``indices`` is taken to be the entire video sequence.
-        channel_first : {True, False}, bool, optional
-            If True then the output has shape ``(T, C, H, W)``, where the channel dimension comes before the spatial dimensions, by default True. Otherwise, the output has shape ``(T, H, W, C)``. If a non-boolean input is passed, then ``channel_first`` automatically defaults to True.
-
-        Returns
-        -------
-        frames : numpy.ndarray instance
-            Numpy array containing the frames of the video, located at ``indices``. The output shape is either ``(T, C, H, W)`` or ``(T, H, W, C)`` depending on the value ``channel_first`` takes.
-
-        """
-        if type(channel_first) is not bool:
-            channel_first = True
-
-        if indices is not None:
-            indices = np.asarray(indices)
-
-        vidcap = cv2.VideoCapture(video_path)
-        frame_count = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        assert (
-            frame_count > 0
-        ), "Invalid video, number of frames must be greater than 0."
-
-        if indices is None:
-            # Instead, just call extract_all_frames, since this is what it defaults to.
-            indices = np.arange(frame_count)
-
-        assert len(indices) > 0, "Number of indices must be strictly greater than 0."
-        assert (
-            len(indices) <= frame_count
-        ), "Number of indices cannot exceed the maximum number of frames."
-        assert (
-            sum([index > frame_count for index in indices]) == 0
-        ), "At least one of the indices exceeds the maximum number of frames."
-        assert (
-            sum([index < 0 for index in indices]) == 0
-        ), "At least one of the indices is negative."
-
-        count = 0
-        index = 0
-        success = True
-        n_indices = len(indices)
-        frames = np.empty((n_indices, frame_height, frame_width, 3), np.dtype("uint8"))
-        while count < frame_count and success and index < n_indices:
-            success = vidcap.grab()
-            if count in indices:
-                success, frames[index] = vidcap.retrieve()
-                index += 1
-            count += 1
-        vidcap.release()
-
-        if channel_first:
-            frames = np.einsum("ijkl->iljk", frames)
-
-        return frames
-    '''
-
     def extract_frames_from_indices(
         self, video_path, indices=None, channel_first=True, return_rgb=True
     ):
@@ -378,7 +315,7 @@ class VideoFileProcessor:
 
         return frames
 
-    def _extract_all_audio(self, video_path, sample_rate=44100):
+    def _extract_all_audio(self, video_path, sample_rate=16000):
         """Extracts the entire audio sequence from a video and returns it as a Numpy array.
 
         Parameters
@@ -386,7 +323,7 @@ class VideoFileProcessor:
         video_path : str
             The absolute path to the video file.
         sample_rate : int, optional
-            The sample rate of the audio, by default 44.1 kHz. If the sample rate is not an integer, then it is converted to one.
+            The sample rate of the audio, by default 16 kHz. If the sample rate is not an integer, then it is converted to one.
 
         Returns
         -------
@@ -401,9 +338,9 @@ class VideoFileProcessor:
             sample_rate = int(sample_rate)
 
         if self.verbose:
-            if sample_rate > 44100:
+            if sample_rate > 16000:
                 warnings.warn(
-                    "The sampling rate is higher than the suggested 44.1 kHz. Proceed with caution."
+                    "The sampling rate is higher than the suggested 16 kHz. Proceed with caution."
                 )
 
         audio_signal = moviepy.editor.AudioFileClip(
@@ -412,7 +349,7 @@ class VideoFileProcessor:
 
         return audio_signal
 
-    def extract_audio_from_indices(self, video_path, indices=None, sample_rate=44100):
+    def extract_audio_from_indices(self, video_path, indices=None, sample_rate=16000):
         """Extracts audio samples from a video, according to ``indices``, and returns it as a Numpy array.
 
         Parameters
@@ -605,19 +542,69 @@ class FramesProcessor:
 class AudioProcessor:
     """Helper class used for processing audio."""
 
-    def __init__(self, verbose=True):
+    def __init__(self, verbose=True, return_phase=False):
         """Instantiates a new AudioProcessor class.
 
         Parameters
         ----------
         verbose : {True, False}, bool, optional
             If True then verbose output is sent to the system console, by default True.
-        
+        return_phase : {False, True}, bool, optional
+            If True then the phase information is returned along with the magnitude information.
+
         """
         self.verbose = verbose
+        self.return_phase = return_phase
+
+    def extract_stft(self, audio_signal, return_torch=True):
+        """Extracts the Short Time Fourier Transform (STFT) from an audio signal.
+
+        Parameters
+        ----------
+        audio_signal : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the audio signal.
+        return_torch : {True, False}, bool, optional
+            If True then the output is converted to a torch.Tensor instance, by default True. If a non-boolean input is passed then the default value is used.
+        
+        Returns
+        -------
+        stft : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the STFT of the audio signal.
+
+        Notes
+        -----
+        Based on Michael's mmid/utils/audio_transforms.py.
+        
+        """
+        if type(audio_signal) is torch.Tensor:
+            audio_signal = audio_signal.numpy()
+        if type(return_torch) is not bool:
+            return_torch = True
+
+        dims = audio_signal.shape
+        stft = librosa.core.stft(np.reshape(audio_signal, (dims[0],)))
+        stft, phase = np.abs(stft), np.angle(stft)
+
+        stft = np.einsum("ij->ji", stft)
+        phase = np.einsum("ij->ji", phase)
+
+        if return_torch:
+            stft = torch.from_numpy(stft)
+            phase = torch.from_numpy(phase)
+            if self.return_phase:
+                return torch.cat((stft, phase), dim=0).float()
+            else:
+                return stft.float()
+        else:
+            if self.return_phase:
+                return np.asarray(
+                    np.concatenate((stft, phase), dim=0), dtype=np.float32
+                )
+            else:
+                return np.asarray(stft, dtype=np.float32)
 
     def extract_spectrogram(
-        self, audio_signal, sample_rate=44100, return_log=True, return_torch=True
+        self, audio_signal, sample_rate=16000, return_log=True, return_torch=True
     ):
         """Extracts the spectrogram from the audio_signal. 
 
@@ -628,7 +615,7 @@ class AudioProcessor:
         audio_signal : numpy.ndarray instance
             The audio signal used to extract the spectrogram information.
         sample_rate : int, optional
-            The sample rate of the audio signal, by default 44.1 kHz. If a float is passed as input, then it will be cast as an integer. If a non-integer or non-float input is passed as input, then the default audio sample rate is used.
+            The sample rate of the audio signal, by default 16 kHz. If a float is passed as input, then it will be cast as an integer. If a non-integer or non-float input is passed as input, then the default audio sample rate is used.
         return_log : {True, False}, bool, optional
             If True then the output is the log-spectrogram, which is in dB units, by default True. Otherwise, the output is the spectrogram, which is in amplitude units. If a non-boolean input is passed then the default value is used.
         return_torch : {True, False}, bool, optional
@@ -644,7 +631,7 @@ class AudioProcessor:
         if type(sample_rate) is float:
             sample_rate = int(sample_rate)
         if type(sample_rate) is not float or type(sample_rate) is not int:
-            sample_rate = 44100
+            sample_rate = 16000
         if type(return_log) is not bool:
             return_log = True
         if type(return_torch) is not bool:
@@ -660,7 +647,7 @@ class AudioProcessor:
 
         return spectrogram
 
-    def plot_spectrogram(self, spectrogram, sample_rate=44100, show_colorbar=False):
+    def plot_spectrogram(self, spectrogram, sample_rate=16000, show_colorbar=False):
         """Plots the spectrogram of an audio signal, sampled at ``sample_rate`` Hz.
 
         Parameters
@@ -668,7 +655,7 @@ class AudioProcessor:
         spectrogram : numpy.ndarray or torch.Tensor instance
             The spectrogram, in amplitude or decibel units, of the audio signal as either a Numpy array or a Torch tensor.
         sample_rate : int, optional
-            The sample rate of the audio signal, by default 44.1 kHz. If a float is passed as input, then it will be cast as an integer. If a non-integer or non-float input is passed then the default audio sample rate is used.
+            The sample rate of the audio signal, by default 16 kHz. If a float is passed as input, then it will be cast as an integer. If a non-integer or non-float input is passed then the default audio sample rate is used.
         show_colorbar : {False, True}, bool, optional
             If True then a colorbar is shown next to the spectrogram, by default False. If a non-boolean input is passed then the default value is used.
 
@@ -676,7 +663,7 @@ class AudioProcessor:
         if type(sample_rate) is float:
             sample_rate = int(sample_rate)
         if type(sample_rate) is not float or type(sample_rate) is not int:
-            sample_rate = 44100
+            sample_rate = 16000
 
         if type(spectrogram) is torch.Tensor:
             spectrogram = spectrogram.numpy()
