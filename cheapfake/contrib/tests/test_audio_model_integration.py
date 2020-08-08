@@ -26,6 +26,7 @@ def test_one(video_path):
     spectrogram = audioprocessor.extract_spectrogram(
         audio_signal=audio_signal, sample_rate=16000, return_log=True, return_torch=True
     )
+    print(audio_signal.shape)
     stft = audioprocessor.extract_stft(audio_signal=audio_signal, return_torch=True)
     # print(stft.shape)
 

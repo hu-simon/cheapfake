@@ -75,7 +75,8 @@ class VGGVox(nn.Module):
     def forward(self, x):
 
         x = self.torchfb(x) + 1e-6
-        x = self.instancenorm(x.log()).unsqueeze(1).detach()
+        print(x.shape)
+        x = self.instancenorm(x.log().unsqueeze(1)).detach()
 
         x = self.netcnn(x)
 
