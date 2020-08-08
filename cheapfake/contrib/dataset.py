@@ -132,7 +132,7 @@ class DeepFakeDataset(Dataset):
         """
         video_path = self.video_paths[index]
 
-        frames = videofile_processor.extract_all_frames(video_path=video_path)
-        audio = videofile_processor._extract_all_audio(video_path=video_path)
+        frames = self.videofile_processor.extract_all_frames(video_path=video_path)
+        audio = self.videofile_processor._extract_all_audio(video_path=video_path)
 
         return frames, audio
