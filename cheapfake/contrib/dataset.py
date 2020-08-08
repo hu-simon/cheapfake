@@ -28,7 +28,7 @@ class DeepFakeDataset(Dataset):
         audio_processor=None,
         frame_transform=None,
         audio_transform=None,
-        return_tensors=True,
+        return_tensor=True,
         verbose=False,
     ):
         """Instantiates a new DeepFakeDataset object.
@@ -47,14 +47,14 @@ class DeepFakeDataset(Dataset):
             A callable function that is used to transform extracted frames from videos, by default None. If None, then no transform is applied to the extracted frames. If a non-callable function is passed as input, then the default transform (i.e. no transform) is used.
         audio_transform : callable, optional
             A callable function that is used to transform extracted audio from videos, by default None. If None, then no transform is applied to the extracted audio. If a non-callable function is passed as input, then the default transform (i.e. no transform) is used.
-        return_tensors : {True, False}, bool, optional
+        return_tensor : {True, False}, bool, optional
             If True, then this parameter is passed to functions that can return tensors as output, by default True. If a non-boolean parameter is passed as input, then the default value is used.
         verbose : {False, True}, bool, optional
             If True then verbose output is sent to the system console. If a non-boolean parameter is passed as input, then the default value is used.
 
         """
-        if type(return_tensors) is not bool:
-            return_tensors = True
+        if type(return_tensor) is not bool:
+            return_tensor = True
         if type(verbose) is not bool:
             verbose = False
 
@@ -73,7 +73,7 @@ class DeepFakeDataset(Dataset):
         self.audio_transform = audio_transform
 
         self.verbose = verbose
-        self.return_tensors = return_tensors
+        self.return_tensor = return_tensor
 
         self.video_paths = self._get_video_paths(root_path=self.root_path)
 
@@ -108,6 +108,47 @@ class DeepFakeDataset(Dataset):
 
         return video_paths
 
+    def _chunk_elements(self, elements, length=1, return_tensor=True):
+        """Chunks a numpy.ndarray or torch.Tensor into smaller elements.
+
+        Parameters
+        ----------
+        elements : numpy.ndarray or torch.Tensor
+            Numpy array or Torch tensor containing the elements to be chunked.
+        length : int, optional
+            The number of elements in each chunk, by default 1. If a float is passed as input, then it is converted to an int. If a non-float or non-int value is passed as input, then the default value is used. If a value less than 1 is passed as input, then the default value is used.
+        return_tensor : {True, False}, bool, optional
+            If True then the output is returned as a torch.Tensor instance, by default True. Otherwise, the output is returned as a numpy.ndarray instance. If a non-boolean value is passed as input, the default value is used.
+
+        Returns
+        -------
+        chunked_elements : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the chunked elements, with each element of length ``length``.
+
+        """
+        if type(return_tensor) is not bool:
+            return_tensor = True
+        if type(length) is float:
+            length = int(length)
+        if type(length) is not float and type(length) is not int:
+            length = 1
+        if length < 1:
+            length = 1
+
+        if type(elements) is torch.Tensor:
+            elements = elements.numpy()
+
+        chunked_elements = list()
+        for k in range(0, len(elements), length):
+            chunked_elements.append(elements[k : k + length])
+
+        chunked_elements = np.array(chunked_elements)
+
+        if return_tensor:
+            chunked_elements = torch.from_numpy(chunked_elements)
+
+        return chunked_elements
+
     def __getitem__(self, index):
         """Extracts frames and audio from the next video instance.
 
@@ -134,5 +175,13 @@ class DeepFakeDataset(Dataset):
 
         frames = self.videofile_processor.extract_all_frames(video_path=video_path)
         audio = self.videofile_processor._extract_all_audio(video_path=video_path)
+
+        # Do transformations before feeding into chunks.
+        frames = self._chunk_elements(
+            frames, length=60, return_tensor=self.return_tensor
+        )
+        audio = self._chunk_elements(
+            audio, length=16000 * 2, return_tensor=self.return_tensor
+        )
 
         return frames, audio
