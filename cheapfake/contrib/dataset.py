@@ -6,10 +6,14 @@ Add support for a more generic transform function.
 
 IDEA
 Instead of doing correlated audio/video we should just randomly sample! Then that would allow us to learn separate embeddings.
+
+TODO
+For the __getitem__() method, we are just going to spit out one sequence of 75 frames, and then one sequence of three seconds of audio. In this manner, we can split the image and audio inputs between the two networks without having to worry about syncing their size. Another experiment would be to sync this up, but let's worry about that later. 
 """
 
 import os
 import time
+import random
 
 import cv2
 import glob
@@ -291,3 +295,59 @@ class DeepFakeDataset(Dataset):
         )
 
         return frames, audio
+
+    # New code.
+    def __getitem__(self, index):
+        """Extracts frames and audio from a video instance.
+        
+        Frames (i.e. set of images) and audio from the video instance is extracted. A specific number of frames from the video stream are extracted, and a specific number of samples from the audio stream are extracted. There is no correlation between the number of frames extracted and the number of audio extracted. 
+
+        All frames and audio samples from the video are extracted and chunked into sizes of 75 and 3 * 16000, respectively. Then, a random chunk (separate trials) from both the chunked frames and audio is chosen as the output. 
+
+        Parameters
+        ----------
+        index : int
+            The index corresponding to the video instance.
+        
+        Returns
+        -------
+        frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the frames extracted from the video.
+        audio : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the audio samples extracted from the video.
+
+        Notes
+        -----
+        Minimal robustness checks are in place. Use with caution.
+
+        """
+        video_path = self.video_paths[index]
+
+        frames = self.videofile_processor.extract_all_frames(video_path=video_path)
+        audio = self.videofile_processor._extract_all_audio(video_path=video_path)
+
+        frames = self.frames_processor.apply_transformation(
+            frames, self.frame_transform
+        )
+        audio = self.audio_processor.apply_transformation(audio, self.audio_transform)
+
+        frames = self._chunk_elements(
+            frames, length=75, return_tensor=self.return_tensor
+        )
+        audio = self._chunk_elements(
+            audio,
+            length=self.sample_rate * self.n_seconds,
+            return_tensor=self.return_tensor,
+        )
+
+        # Now we are going to select a random chunk.
+        n_chunks_frames = frames.shape[0]
+        n_chunks_audio = audio.shape[0]
+        frames_random_index = random.randrange(n_chunks_frames)
+        audio_random_index = random.randrand(n_chunks_audio)
+
+        frames = frames[frames_random_index]
+        audio = audio[audio_random_index]
+
+        return frames, audio
+
