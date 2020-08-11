@@ -12,10 +12,18 @@ import librosa.display
 import matplotlib.pyplot as plt
 
 """
-Have not tested the STFT stuff.
+Need to add support for resizing the image. I guess this stuff should be done here, but we can also generalize it so that it takes any (callable) function. 
 
-Need to also add support for a dataloader object. But this should probably be put in a separate .py file.
+This then means that new testing needs to be done.
+
 """
+
+
+def _identity_function(x):
+    """Returns the identity transform of the input ``x``.
+    
+    """
+    return x
 
 
 class VideoFileProcessor:
@@ -32,7 +40,7 @@ class VideoFileProcessor:
             If True, then all outputs will have shapes where the channel dimension comes before the spatial dimensions, by default True.
         return_rgb : {True, False}, bool, optional
             If True, then all outputs will adhere to the RGB channel format, by default True. Otherwise, the outputs will adhere to the BGR channel format. 
-        
+
         """
         self.verbose = verbose
         self.channel_first = channel_first
@@ -73,7 +81,9 @@ class VideoFileProcessor:
 
         return video_info
 
-    def _extract_all_frames(self, vidcap, channel_first=True, return_rgb=True):
+    def _extract_all_frames(
+        self, vidcap, channel_first=True, return_rgb=True,
+    ):
         """Extracts all frames from a video and returns it as a Numpy array.
 
         If ``channel_first == True``, then the output has shape ``(T, C, H, W)`` and ``(T, H, W, C)`` otherwise. Here, T represents time, C represents channel, H represents height, and W represents width.
@@ -86,7 +96,7 @@ class VideoFileProcessor:
             If True then the output has shape ``(T, C, H, W)``, where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. If a non-boolean input is passed, then ``channel_first`` defaults to True.
         return_rgb : {True, False}, bool, optional
             If True, then the output adheres to the RGB color format, by default True. Otherwise, the output adheres to the BGR color format. If a non-boolean input is passed, then ``return_rgb`` defaults to True.
-        
+
         Returns
         -------
         frames : numpy.ndarray instance
@@ -407,6 +417,31 @@ class FramesProcessor:
         """
         self.verbose = verbose
 
+    def apply_transformation(self, frames, transform, *args, **kwargs):
+        """Applies a transformation to a batch of frames.
+
+        Parameters
+        ----------
+        frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the frames.
+        transform : callable
+            Callable function used to transform the frames. If a non-callable function is sent in as input, then an error will be raised. 
+        *args
+            Variable length arguments that are passed onto ``transform``.
+        **kwargs
+            Variable length keyword arguments that are passed onto ``transform``.
+
+        Returns
+        -------
+        transformed_frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the transformed frames.
+
+        """
+        assert callable(transform) == True, "Transformation passed must be callable."
+        transformed_frames = transform(frames, *args, **kwargs)
+
+        return transformed_frames
+
     def _extract_landmarks(self, model, frame, channel_first=True):
         """Extracts landmarks for a single image, using the Face Alignment Network.
 
@@ -555,6 +590,31 @@ class AudioProcessor:
         """
         self.verbose = verbose
         self.return_phase = return_phase
+
+    def apply_transformation(self, audio, transform, *args, **kwargs):
+        """Applies a transformation to an audio signal.
+
+        Parameters
+        ----------
+        audio : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the audio signal.
+        transform : callable
+            Callable function used to transform the frames. If a non-callable function is sent in as input, then an error will be raised.
+        *args
+            Variable length arguments that are passed onto ``transform``.
+        **kwargs
+            Variable length keyword arguments that are passed onto ``transform``.
+        
+        Returns
+        -------
+        transformed_audio : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the transformed audio.
+
+        """
+        assert callable(transform) == True, "Transformation passed must be callable."
+        transformed_audio = transform(audio, *args, **kwargs)
+
+        return transformed_audio
 
     def extract_stft(self, audio_signal, return_torch=True):
         """Extracts the Short Time Fourier Transform (STFT) from an audio signal.
