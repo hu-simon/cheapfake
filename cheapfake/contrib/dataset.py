@@ -9,6 +9,8 @@ Instead of doing correlated audio/video we should just randomly sample! Then tha
 
 TODO
 For the __getitem__() method, we are just going to spit out one sequence of 75 frames, and then one sequence of three seconds of audio. In this manner, we can split the image and audio inputs between the two networks without having to worry about syncing their size. Another experiment would be to sync this up, but let's worry about that later. 
+
+Remove checks for non-whatever values. Probably not necessary and should just hope that the user is smart enough to figure it out...
 """
 
 import os
@@ -52,6 +54,10 @@ class DeepFakeDataset(Dataset):
         audio_transform=None,
         return_tensor=True,
         verbose=False,
+        random_seed=41,
+        sequential_frames=False,
+        sequential_audio=False,
+        stochastic=True,
     ):
         """Instantiates a new DeepFakeDataset object.
 
@@ -70,35 +76,55 @@ class DeepFakeDataset(Dataset):
         sample_rate : int, optional
             The sample rate of the audio, by default 16 kHz. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
         n_seconds : int, optional
-            The number of seconds, passed onto __getitem__(), by default 2 seconds. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
+            The number of seconds, passed onto __getitem__(), by default 3 seconds. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
         channel_first : {True, False}, bool, optional
-            TODO
+            If True then all input and output are assumed to have shape ``(T, C, H, W)`` where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. If a non-boolean input is passed then the default value is used.
         frame_transform : callable, optional
-            A callable function that is used to transform extracted frames from videos, by default None. If None, then no transform is applied to the extracted frames. If a non-callable function is passed as input, then the default transform (i.e. no transform) is used. The transform must be able to operate on batches (i.e., of shape ``(B, C, H, W)`` or ``(B, H, W, C)``).
+            A callable function that is used to transform extracted frames from videos, by default None. If None, then the resizing transform is applied to the frames. If a non-callable function is passed as input, then the default transform is used. The transform must be able to operate on batches (i.e., of shape ``(B, C, H, W)`` or ``(B, H, W, C)``).
         audio_transform : callable, optional
             A callable function that is used to transform extracted audio from videos, by default None. If None, then no transform is applied to the extracted audio. If a non-callable function is passed as input, then the default transform (i.e. no transform) is used. The transform must be able to operate on batches (i.e., of shape ``(B, C, H, W)`` or ``(B, H, W, C)``).
         return_tensor : {True, False}, bool, optional
             If True, then this parameter is passed to functions that can return tensors as output, by default True. If a non-boolean parameter is passed as input, then the default value is used.
         verbose : {False, True}, bool, optional
             If True then verbose output is sent to the system console. If a non-boolean parameter is passed as input, then the default value is used.
+        random_seed : int, optional
+            The random seed used for reproducibility, by default 41. If a float is passed as input, then it is cast as an int. If a non-float and non-int value is passed as input, then the default value is used.
+        sequential_frames : {False, True}, bool, optional
+            If True then ``__getitem__`` returns sequential data after an initial index is chosen at random, by default True. Otherwise, ``__getitem__`` returns data that is not guaranteed to be sequential (i.e. each sample is chosen stochastically). If a non-boolean input is passed as input, then the default value is taken.
+        sequential_audio : {False, True}, bool, optional
+            If True then ``__getitem__`` returns sequential data after an initial index is chosen at random, by default True. Otherwise, ``__getitem__`` returns data that is not guaranteed to be sequential (i.e. each sample is chosen stochastically). If a non-boolean input is passed as input, then the default value is taken.
+        stochastic : {True, False}, bool, optional
+            If True then ``__getitem__`` returns data using a stochastic selection strategy, by default True. Otherwise, only the first ``n_seconds * frames_per_second`` frames and ``n_seconds * sample_rate`` audio samples are returned. If a non-boolean input is passed as input, then the default value is taken.
 
         """
         if type(frames_per_second) is float:
             frames_per_second = int(frames_per_second)
-        if type(frames_per_second) is not float and type(frames_per_second) is not int:
+        elif (
+            type(frames_per_second) is not float and type(frames_per_second) is not int
+        ):
             frames_per_second = 30
         if type(sample_rate) is float:
             sample_rate = int(sample_rate)
-        if type(sample_rate) is not float and type(sample_rate) is not int:
+        elif type(sample_rate) is not float and type(sample_rate) is not int:
             sample_rate = 16000
         if type(n_seconds) is float:
             n_seconds = int(n_seconds)
-        if type(n_seconds) is not float and type(n_seconds) is not int:
-            n_seconds = 2
+        elif type(n_seconds) is not float and type(n_seconds) is not int:
+            n_seconds = 3
         if type(return_tensor) is not bool:
             return_tensor = True
         if type(verbose) is not bool:
             verbose = False
+        if type(random_seed) is float:
+            random_seed = int(random_seed)
+        elif type(random_seed) is not float and type(random_seed) is not int:
+            random_seed = 41
+        if type(sequential_frames) is not bool:
+            sequential_frames = False
+        if type(sequential_audio) is not bool:
+            sequential_audio = False
+        if type(stochastic) is not bool:
+            stochastic = True
 
         self.root_path = root_path
 
@@ -107,9 +133,13 @@ class DeepFakeDataset(Dataset):
                 verbose=verbose
             )
         if frames_processor is None:
-            self.frames_processor = video_processor.FramesProcessor(verbose=verbose)
+            self.frames_processor = video_processor.FramesProcessor(
+                verbose=verbose, random_seed=random_seed
+            )
         if audio_processor is None:
-            self.audio_processor = video_processor.AudioProcessor(verbose=verbose)
+            self.audio_processor = video_processor.AudioProcessor(
+                verbose=verbose, random_seed=random_seed
+            )
 
         self.frames_per_second = frames_per_second
         self.sample_rate = sample_rate
@@ -122,7 +152,7 @@ class DeepFakeDataset(Dataset):
             ), "The frame transform must be a callable function."
             self.frame_transform = frame_transform
         else:
-            self.frame_transform = _identity_transform
+            self.frame_transform = self._resize_frames
         if audio_transform is not None:
             assert (
                 callable(audio_transform) == True
@@ -133,6 +163,12 @@ class DeepFakeDataset(Dataset):
 
         self.verbose = verbose
         self.return_tensor = return_tensor
+        self.random_seed = random_seed
+        self.sequential_frames = sequential_frames
+        self.sequential_audio = sequential_audio
+        self.stochastic = stochastic
+
+        random.seed(random_seed)
 
         self.video_paths = self._get_video_paths(root_path=self.root_path)
 
@@ -252,57 +288,11 @@ class DeepFakeDataset(Dataset):
         return chunked_elements
 
     def __getitem__(self, index):
-        """Extracts frames and audio from the next video instance.
-
-        Frames and audio from each video instance are extracted, in chunks of 60 frames and 2 * 16000, for video and audio respectively.  
-
-        Parameters
-        ----------
-        index : int
-            The index corresponding to the next video instance.
-        
-        Returns
-        -------
-        frames : numpy.ndarray or torch.Tensor instance
-            The frames extracted from the video.
-        audio : numpy.ndarray or torch.Tensor instance
-            The audio extracted from the video.
-
-        Notes
-        -----
-        For every batch of size one (1) loaded by PyTorch, a batch of size three (3) is loaded by this function.
-
-        """
-        video_path = self.video_paths[index]
-
-        frames = self.videofile_processor.extract_all_frames(video_path=video_path)
-        audio = self.videofile_processor._extract_all_audio(video_path=video_path)
-
-        frames = self.frames_processor.apply_transformation(
-            frames, self.frame_transform
-        )
-        audio = self.audio_processor.apply_transformation(audio, self.audio_transform)
-
-        frames = self._chunk_elements(
-            frames,
-            length=self.frames_per_second * self.n_seconds,
-            return_tensor=self.return_tensor,
-        )
-        audio = self._chunk_elements(
-            audio,
-            length=self.sample_rate * self.n_seconds,
-            return_tensor=self.return_tensor,
-        )
-
-        return frames, audio
-
-    # New code.
-    def __getitem__(self, index):
         """Extracts frames and audio from a video instance.
         
         Frames (i.e. set of images) and audio from the video instance is extracted. A specific number of frames from the video stream are extracted, and a specific number of samples from the audio stream are extracted. There is no correlation between the number of frames extracted and the number of audio extracted. 
 
-        All frames and audio samples from the video are extracted and chunked into sizes of 75 and 3 * 16000, respectively. Then, a random chunk (separate trials) from both the chunked frames and audio is chosen as the output. 
+        All frames and audio samples from the video are extracted and chunked into sizes of 75 and 3 * 16000, respectively. 
 
         Parameters
         ----------
@@ -331,23 +321,23 @@ class DeepFakeDataset(Dataset):
         )
         audio = self.audio_processor.apply_transformation(audio, self.audio_transform)
 
-        frames = self._chunk_elements(
-            frames, length=75, return_tensor=self.return_tensor
-        )
-        audio = self._chunk_elements(
-            audio,
-            length=self.sample_rate * self.n_seconds,
-            return_tensor=self.return_tensor,
-        )
+        if self.stochastic:
+            frames = self.frames_processor.sample_frames_stochastic(
+                frames,
+                n_samples=self.n_seconds * self.frames_per_second,
+                sequential=self.sequential_frames,
+            )
+            audio = self.audio_processor.sample_audio_stochastic(
+                audio,
+                n_samples=self.n_seconds * self.sample_rate,
+                sequential=self.sequential_audio,
+            )
+        else:
+            frames = frames[0 : self.n_seconds * self.frames_per_second]
+            audio = audio[0 : self.n_seconds * self.sample_rate]
 
-        # Now we are going to select a random chunk.
-        n_chunks_frames = frames.shape[0]
-        n_chunks_audio = audio.shape[0]
-        frames_random_index = random.randrange(n_chunks_frames)
-        audio_random_index = random.randrand(n_chunks_audio)
-
-        frames = frames[frames_random_index]
-        audio = audio[audio_random_index]
+        if self.return_tensor:
+            frames = torch.from_numpy(frames)
+            audio = torch.from_numpy(audio)
 
         return frames, audio
-

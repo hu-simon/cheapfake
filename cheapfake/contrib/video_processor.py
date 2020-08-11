@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import warnings
 
 import cv2
@@ -12,10 +13,8 @@ import librosa.display
 import matplotlib.pyplot as plt
 
 """
-Need to add support for resizing the image. I guess this stuff should be done here, but we can also generalize it so that it takes any (callable) function. 
-
-This then means that new testing needs to be done.
-
+TODO
+For things like ``channel_first`` and ``return_rgb``, we should default them to the value taken when __init__() is run.
 """
 
 
@@ -406,16 +405,24 @@ class VideoFileProcessor:
 class FramesProcessor:
     """Helper class used for processing video frames."""
 
-    def __init__(self, verbose=True):
+    def __init__(
+        self, verbose=True, channel_first=True, return_rgb=True, random_seed=41
+    ):
         """Instantiates a FramesProcessor object.
 
         Parameters
         ----------
         verbose : {True, False}, bool, optional
             If True then verbose output is sent to the system console, by default True.
-
+        channel_first : {True, False}, bool, optional
+        return_rgb : {True, False}, bool, optional
+        random_seed : int, optional
+        
         """
         self.verbose = verbose
+        self.channel_first = channel_first
+        self.return_rgb = return_rgb
+        self.random_seed = random_seed
 
     def apply_transformation(self, frames, transform, *args, **kwargs):
         """Applies a transformation to a batch of frames.
@@ -573,11 +580,95 @@ class FramesProcessor:
 
         return batch_landmarks
 
+    def sample_stochastic_all(
+        self,
+        video_path,
+        n_samples=1,
+        length=75,
+        channel_first=True,
+        return_rgb=True,
+        random_seed=41,
+        return_all=False,
+    ):
+        """Creates samples of a specific 
+
+        All frames from the video sequence are extracted, and then ``n_samples`` groups of batches of length ``length`` are created and returned as output.
+
+        Parameters
+        ----------
+        video_path : str
+            The absolute path to the video file.
+        n_samples : int, optional
+            The number of samples to collect, by default 1. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
+        length : int, optional
+            The length of each sample (i.e. the number of frames in each sample), by default 75. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
+        channel_first : {True, False}, bool, optional
+            If True then the output has shape ``(T, C, H, W)``, where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. If a non-boolean input is passed, then the default value is taken.
+        return_rgb : {True, False}, bool, optional
+            If True then the output adheres to the RGB color format, by default True. Otherwise the output adheres to the BGR color format. If a non-boolean input is passed then the default value is taken.
+        random_seed : int, optional
+            The random seed used for reproducibility, by default 41. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is taken.
+        return_all : {False, True}, bool, optional
+            If True then all samples are returned 
+
+        Returns
+        -------
+        frames : numpy.ndarray instance
+            Numpy array containing a set of frames, stochastically sampled from the video stream.
+        
+        """
+        pass
+
+    def sample_frames_stochastic(self, frames, n_samples=75, sequential=True):
+        """Stochastically samples ``n_samples`` number of frames. 
+
+        If ``sequential``, then a random index is uniformly sampled from ``{0, ..., len(frames) - n_samples - 1}`` to represent the starting frame. Then, from the starting frame, ``length`` sequential frames are returned. For example, if the number of frames is 300, the number of samples is 75, and the random index is 4, then ``frames[4 : 4 + 75]`` is returned.
+
+        If not ``sequential``, then ``n_samples`` of unique random indices are uniformly sampled from ``{0, ..., len(frames)}``, representing the frame indices. The frames at these indices are then returned as output.
+
+        Parameters
+        ----------
+        frames : numpy.ndarray instance or torch.Torch instance
+            Numpy array or Torch tensor containing the frames to sample from.
+        n_samples : int, optional
+            The number of samples to draw, by default 75. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is taken.
+        sequential : {True, False}, bool, optional
+            If True then the samples are drawn sequentially after an initial index is selected stochastically, by default True. Otherwise, all samples are drawn stochastically. If a non-boolean value is passed as input then the default value is taken.
+        
+        Returns
+        -------
+        frames : numpy.ndarray instance
+            Numpy array containing the sampled frames.
+
+        """
+        if type(n_samples) is float:
+            n_samples = int(n_samples)
+        elif type(n_samples) is not float and type(n_samples) is not int:
+            n_samples = 75
+
+        random.seed(self.random_seed)
+
+        if sequential:
+            assert n_samples < len(
+                frames
+            ), "The length of the sampled frames must be less than the total number of frames!"
+
+            random_index = random.randrange(0, len(frames) - n_samples - 1)
+            frames = frames[random_index : random_index + n_samples]
+        else:
+            assert n_samples <= len(
+                frames
+            ), "The total number of samples cannot be greater than the number of frames!"
+            random_indices = random.sample(range(len(frames)), k=n_samples)
+            frames = frames[random_indices]
+
+        return frames
+
 
 class AudioProcessor:
     """Helper class used for processing audio."""
 
-    def __init__(self, verbose=True, return_phase=False):
+    def __init__(self, verbose=True, return_phase=False, random_seed=41):
         """Instantiates a new AudioProcessor class.
 
         Parameters
@@ -586,10 +677,13 @@ class AudioProcessor:
             If True then verbose output is sent to the system console, by default True.
         return_phase : {False, True}, bool, optional
             If True then the phase information is returned along with the magnitude information.
+        random_seed : int, optional
+            The random seed used for reproducibility.
 
         """
         self.verbose = verbose
         self.return_phase = return_phase
+        self.random_seed = random_seed
 
     def apply_transformation(self, audio, transform, *args, **kwargs):
         """Applies a transformation to an audio signal.
@@ -735,3 +829,48 @@ class AudioProcessor:
         if show_colorbar:
             plt.colorbar(format="%+02.0f dB")
         plt.show()
+
+    def sample_audio_stochastic(self, audio, n_samples=48000, sequential=True):
+        """Stochastically samples ``n_samples`` number of samples from the audio signal.
+
+        If ``sequential``, then a random index is uniformly sampled from ``{0, ..., len(audio) - n_samples - 1}`` to represent the start index. Then from the starting frame, ``length`` sequential audio samples are returned. For example if the number of audio samples is 48000, the number of samples is 1000, and the random index is 10 then ``audio[10 : 10 + 1000]`` is returned.
+
+        If not ``sequential``, then ``n_samples`` of unique random indices are uniformly sampled from ``{0, ..., len(audio)}``, representing the indices of the audio sample. The audio samples at these indices are then returned as output.
+
+        Parameters
+        ----------
+        audio : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the audio samples.
+        n_samples : int, optional
+            The number of samples to draw, by default 48000. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is taken.
+        sequential : {True, False}, bool, optional
+            If True then the samples are drawn sequentially after an initial index is selected stochastically, by default True. Otherwise, all samples are drawn stochastically. If a non-boolean value is passed as input then the default value is taken.
+        
+        Returns
+        -------
+        audio : numpy.ndarray instance
+            Numpy array containing the stochastically sampled audio samples.
+        
+        """
+        if type(n_samples) is float:
+            n_samples = int(n_samples)
+        elif type(n_samples) is not float and type(n_samples) is not int:
+            n_samples = 48000
+
+        random.seed(self.random_seed)
+
+        if sequential:
+            assert n_samples < len(
+                audio
+            ), "The number of samples must be less than the total number of audio samples!"
+
+            random_index = random.randrange(0, len(audio) - n_samples - 1)
+            audio = audio[random_index : random_index + n_samples]
+        else:
+            assert n_samples <= len(
+                audio
+            ), "The total number of samples cannot be greater than the number of audio samples!"
+            random_indices = random.sample(range(len(audio)), k=n_samples)
+            audio = audio[random_indices]
+
+        return audio
