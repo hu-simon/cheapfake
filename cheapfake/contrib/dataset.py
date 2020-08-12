@@ -1,16 +1,7 @@
 """
 Python file that creates the necessary objects for training cheapfake.
 
-TODO
-Add support for a more generic transform function.
-
-IDEA
-Instead of doing correlated audio/video we should just randomly sample! Then that would allow us to learn separate embeddings.
-
-TODO
-For the __getitem__() method, we are just going to spit out one sequence of 75 frames, and then one sequence of three seconds of audio. In this manner, we can split the image and audio inputs between the two networks without having to worry about syncing their size. Another experiment would be to sync this up, but let's worry about that later. 
-
-Remove checks for non-whatever values. Probably not necessary and should just hope that the user is smart enough to figure it out...
+The sanity checks should be removed because they take up a lot of space and not all users are stupid.
 """
 
 import os
@@ -22,9 +13,9 @@ import glob
 import torch
 import librosa
 import numpy as np
-from torchvision import transforms
 from torch.utils.data import Dataset
 
+import cheapfake.contrib.transforms as transforms
 import cheapfake.contrib.video_processor as video_processor
 
 
@@ -152,7 +143,7 @@ class DeepFakeDataset(Dataset):
             ), "The frame transform must be a callable function."
             self.frame_transform = frame_transform
         else:
-            self.frame_transform = self._resize_frames
+            self.frame_transform = transforms.BatchRescale(output_size=(64, 128))
         if audio_transform is not None:
             assert (
                 callable(audio_transform) == True
@@ -313,6 +304,17 @@ class DeepFakeDataset(Dataset):
 
         return chunked_elements
 
+    def __len__(self):
+        """Computes the number of videos.
+
+        Returns
+        -------
+        int
+            The number of videos.
+
+        """
+        return len(self.video_paths)
+
     def __getitem__(self, index):
         """Extracts frames and audio from a video instance.
         
@@ -372,6 +374,6 @@ class DeepFakeDataset(Dataset):
         if self.return_tensor:
             frames = torch.from_numpy(frames)
             audio = torch.from_numpy(audio)
-            audio_stft = torch.from_numpy(audio_stft)
+            # audio_stft = torch.from_numpy(audio_stft)
 
         return frames, audio, audio_stft

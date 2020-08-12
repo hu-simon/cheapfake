@@ -160,3 +160,114 @@ class BatchRescaleFlip(object):
         # Flip the resized_frames based on the probability. TODO
 
         return resized_frames
+
+
+class BatchNormalizeRGB(object):
+    """Normalizes the color dimension, on a collection of images, to have zero mean and unit standard deviation.
+
+    """
+
+    def __init__(self, return_tensor=True, channel_first=True):
+        """Instantiates a new NormalizeRGB object.
+
+        Parameters
+        ----------
+        return_tensor : {True, False}, bool, optional
+            If True then the output is returned as a torch.Tensor instance, by default True. Otherwise the output is returned as a numpy.ndarray instance.
+        channel_first : {True, False}, bool, optional
+            If True then the input and output are assumed to be of the shape (sample, channel, height, width). Otherwise the input and output are assumed to be of the shape (sample, height, width, channel).
+    
+        """
+        assert isinstance(return_tensor, bool)
+        assert isinstance(channel_first, bool)
+
+        self.return_tensor = return_tensor
+        self.channel_first = channel_first
+
+    def __call__(self, frames):
+        """Normalizes the collection of frames to have zero mean and unit standard deviation.
+
+        The normalization is done for each channel.
+
+        Parameters
+        ----------
+        frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the frames.
+        
+        Returns
+        -------
+        normalized_frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the frames with the channel dimensions normalized to have zero mean and unit standard deviation.
+        
+        """
+        assert isinstance(
+            frames, (np.ndarray, torch.Tensor)
+        ), "Array must be a numpy.ndarray or torch.Tensor instance."
+        assert len(frames) > 0, "Array must contain at least one frame."
+
+        if self.channel_first:
+            axis_order = (0, 2, 3)
+        else:
+            axis_order = (0, 1, 2)
+
+        normalized_frames = (frames - frames.mean(axis=axis_order, keepdims=True)) / (
+            frames.std(axis=axis_order, keepdims=True)
+        )
+
+        return normalized_frames
+
+
+class BatchResizeNormalize(object):
+    """Resizes and normalizes the color channels, for a collection of images, to have zero mean and unit standard deviation.
+
+    """
+
+    def __init__(self, output_size, return_tensor=True, channel_first=True):
+        """Instantiates a new BatchResizeNormalize object.
+
+        Parameters
+        ----------
+        output_size : int or tuple
+            The output size of the image (height and width). If an integer is passed as input, then the output size of the image is determined by scaling the height and width of the original image.
+        return_tensor : {True, False}, bool, optional
+            If True then the output is returned as a torch.Tensor instance, by default True. Otherwise the output is returned as a numpy.ndarray instance.
+        channel_first : {True, False}, bool, optional
+            If True then the input and output are assumed to be of the shape (sample, channel, height, width). Otherwise the input and output are assumed to be of the shape (sample, height, width, channel).
+    
+        """
+        assert isinstance(output_size, (int, tuple))
+        assert isinstance(return_tensor, bool)
+        assert isinstance(channel_first, bool)
+
+        self.output_size = output_size
+        self.return_tensor = return_tensor
+        self.channel_first = channel_first
+
+        self.rescale_transform = BatchResize(
+            output_size=self.output_size,
+            return_tensor=self.return_tensor,
+            channel_first=self.channel_first,
+        )
+        self.normalize_transform = BatchNormalizeRGB(
+            return_tensor=self.return_tensor, channel_first=self.channel_first
+        )
+
+    def __call__(self, frames):
+        """Resizes and normalizes the color channels, for a collection of images, to have zero mean and unit standard deviation.
+
+        Parameters
+        ----------
+        frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the frames to be resized and normalized.
+        
+        Returns
+        -------
+        transformed_frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the resized and color normalized frames, normalized to have zero mean and unit standard deviation.
+
+        """
+        resized_frames = self.rescale_transform(frames)
+        transformed_frames = self.normalize_transform(resized_frames)
+
+        return transformed_frames
+

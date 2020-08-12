@@ -52,7 +52,7 @@ def test_two(root_path):
     video_path = dfdataset.video_paths[0]
 
     start_time = time.time()
-    frames, audio = dfdataset.__getitem__(0)
+    frames, audio, _ = dfdataset.__getitem__(0)
     end_time = time.time()
 
     print(frames.shape)
@@ -124,6 +124,6 @@ def test_four(video_path):
 if __name__ == "__main__":
     root_path = "/Users/shu/Documents/Datasets/DFDC_small_subset_raw"
     # test_one(root_path)
-    # test_two(root_path)
+    test_two(root_path)
     # test_three(root_path)
     # test_four(root_path)

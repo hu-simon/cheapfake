@@ -9,11 +9,13 @@ class LipNet(nn.Module):
     Implements the LipNet architecture.
     """
 
-    def __init__(self, dropout_rate=0.5, verbose=True):
+    def __init__(self, input_size=(64, 128), dropout_rate=0.5, verbose=True):
         """Instantiates a LipNet architecture.
 
         Parameters
         ----------
+        input_size : tuple
+            The input size of the images that are being fed into the network.
         dropout_rate : float, optional
             The dropout rate applied after each convolutional layer, by default 0.5.
         verbose : {True, False}, bool, optional
@@ -22,6 +24,7 @@ class LipNet(nn.Module):
         """
         super(LipNet, self).__init__()
         self.dropout_rate = dropout_rate
+        self.input_size = input_size
         self.verbose = verbose
 
         self.conv1 = nn.Conv3d(3, 32, (3, 5, 5), (1, 2, 2), (1, 2, 2))
@@ -35,7 +38,7 @@ class LipNet(nn.Module):
 
         # The following is original: (96 * 4 * 8, 256, 1, bidirectional=True)
         # self.gru1 = nn.GRU(96 * 4 * 8, 256, 1, bidirectional=True)
-        self.gru1 = nn.GRU(46080, 256, 1, bidirectional=True)
+        self.gru1 = nn.GRU(input_size[0] * input_size[1], 256, 1, bidirectional=True)
         self.gru2 = nn.GRU(512, 256, 1, bidirectional=True)
 
         self.relu = nn.ReLU(inplace=True)
