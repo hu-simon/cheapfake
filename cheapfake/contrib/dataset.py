@@ -331,6 +331,8 @@ class DeepFakeDataset(Dataset):
             Numpy array or Torch tensor containing the frames extracted from the video.
         audio : numpy.ndarray or torch.Tensor instance
             Numpy array or Torch tensor containing the audio samples extracted from the video.
+        audio_stft : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the Short-Time Fourier Transform (STFT) of the audio signal.
 
         Notes
         -----
@@ -369,6 +371,7 @@ class DeepFakeDataset(Dataset):
 
         if self.return_tensor:
             frames = torch.from_numpy(frames)
+            audio = torch.from_numpy(audio)
             audio_stft = torch.from_numpy(audio_stft)
 
         return frames, audio, audio_stft
