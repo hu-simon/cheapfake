@@ -243,6 +243,32 @@ class DeepFakeDataset(Dataset):
 
         return resized_frames
 
+    def _permute_for_lipnet(self, frames):
+        """Permutes the dimensions of ``frames`` so that it fits within what is expected by LipNet.
+
+        ``frames`` should have shape (sample, color, height, width) and by the end, ``frames`` will have shape (color, sample, height, width). 
+    
+        Parameters
+        ----------
+        frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the frames, with shape (sample, color, height, width).
+        
+        Returns
+        -------
+        frames : numpy.ndarray
+            Numpy array containing the frames, with shape (color, sample, height, width).
+
+        Notes
+        -----
+        If a torch.Tensor instance is passed in, it is first converted to a Numpy array to take advantage of speed boosts.
+
+        """
+        if type(frames) is torch.Tensor:
+            frames = frames.numpy()
+        frames = np.einsum("ijkl->jikl", frames)
+
+        return frames
+
     def _chunk_elements(self, elements, length=1, return_tensor=True):
         """Chunks a numpy.ndarray or torch.Tensor into smaller elements.
 
@@ -336,8 +362,13 @@ class DeepFakeDataset(Dataset):
             frames = frames[0 : self.n_seconds * self.frames_per_second]
             audio = audio[0 : self.n_seconds * self.sample_rate]
 
+        frames = self._permute_for_lipnet(frames)
+        audio_stft = self.audio_processor.extract_stft(
+            audio, return_torch=self.return_tensor
+        )
+
         if self.return_tensor:
             frames = torch.from_numpy(frames)
-            audio = torch.from_numpy(audio)
+            audio_stft = torch.from_numpy(audio_stft)
 
-        return frames, audio
+        return frames, audio, audio_stft
