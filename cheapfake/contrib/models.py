@@ -63,10 +63,15 @@ class CheapFake(nn.Module):
         self.num_modules = num_modules
         self.verbose = verbose
 
-        self._create_submodels()
+        self._load_lipnet()
 
-    def _create_submodels(self):
-        self.lipnet_model = lipnet.LipNet(
-            dropout_rate=self.dropout_rate, verbose=self.verbose
-        )
-        self.fan_model = face_alignment.Lipnet
+    def _load_lipnet(self, load_weights=True):
+        """Creates a new instance of the LipNet model and also loads pre-trained weights if they are available.
+        
+        Parameters
+        ----------
+        load_weights : {True, False}, bool, optional
+            If True then the pre-trained LipNet weights are loaded.
+        
+        """
+        assert isinstance(load_weights, bool)
