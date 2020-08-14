@@ -18,6 +18,12 @@ from torch.utils.data import Dataset
 import cheapfake.contrib.transforms as transforms
 import cheapfake.contrib.video_processor as video_processor
 
+"""
+Test aligned vs. mis-aligned this gives us information. 
+
+Also need to figure out how to load the 
+"""
+
 
 def _identity_transform(x):
     """Identity transformation that does not do anything to the input.

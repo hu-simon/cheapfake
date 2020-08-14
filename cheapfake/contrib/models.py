@@ -10,6 +10,9 @@ import cheapfake.lipnet.models as lipnet
 import cheapfake.contrib.dataset as dataset
 import cheapfake.contrib.video_processor as video_processor
 
+lipnet_options = __import__("lipnet_config")
+fan_options = __import__("face_alignment_config")
+
 
 class MLP(nn.Module):
     """Implements the Multi-Layer Perceptron network used at the end of the CheapFake network.
@@ -36,7 +39,12 @@ class CheapFake(nn.Module):
     """
 
     def __init__(
-        self, input_size=(64, 128), dropout_rate=0.5, num_modules=1, verbose=False
+        self,
+        input_size=(64, 128),
+        dropout_rate=0.5,
+        num_modules=1,
+        verbose=False,
+        device=torch.device("cpu"),
     ):
         """Instantiates a new CheapFake object.
 
@@ -50,6 +58,8 @@ class CheapFake(nn.Module):
             The number of modules, by default 1.
         verbose : {False, True}, bool, optional
             If verbose then progress of the forward pass is printed, by default True.
+        device : torch.device instance
+            The device where all computations are carried out, by default torch.device("cpu").
 
         """
         super(CheapFake, self).__init__()
@@ -57,13 +67,16 @@ class CheapFake(nn.Module):
         assert isinstance(dropout_rate, float)
         assert isinstance(num_modules, int)
         assert isinstance(verbose, bool)
+        assert isinstance(device, torch.device)
         assert dropout_rate <= 1 and dropout_rate > 0, "Probability must be in (0, 1]."
 
         self.dropout_rate = dropout_rate
         self.num_modules = num_modules
         self.verbose = verbose
+        self.device = device
 
         self._load_lipnet()
+        self._load_fan()
 
     def _load_lipnet(self, load_weights=True):
         """Creates a new instance of the LipNet model and also loads pre-trained weights if they are available.
@@ -75,3 +88,102 @@ class CheapFake(nn.Module):
         
         """
         assert isinstance(load_weights, bool)
+
+        self.lipnet_model = lipnet.LipNet()
+        self.lipnet_model.to(self.device)
+        self.lipnet_model.eval()
+
+        if load_weights:
+            if hasattr(lipnet_options, "weights"):
+                pretrained_dict = torch.load(
+                    lipnet_options.weights, map_location=self.device
+                )
+                pretrained_dict["fully_connected.weight"] = pretrained_dict.pop(
+                    "FC.weight"
+                )
+                pretrained_dict["fully_connected.bias"] = pretrained_dict.pop("FC.bias")
+                model_dict = self.lipnet_model.state_dict()
+                pretrained_dict = {
+                    k: v
+                    for k, v in pretrained_dict.items()
+                    if k in model_dict.keys() and v.size() == model_dict[k].size()
+                }
+                missed_params = [
+                    k for k, v in model_dict.items() if not k in pretrained_dict.keys()
+                ]
+                if self.verbose:
+                    print(
+                        "Loaded parameters / Total parameters: {}/{}".format(
+                            len(pretrained_dict), len(model_dict)
+                        )
+                    )
+                model_dict.update(pretrained_dict)
+                self.lipnet_model.load_state_dict(model_dict)
+            else:
+                print(
+                    "[WARNING] Invalid path to pre-trained weights. No weights will be loaded."
+                )
+        else:
+            if self.verbose:
+                print("[INFO] No pre-trained weights were loaded.")
+
+    def _load_fan(self):
+        """Creates a new instance of the FAN model and loads pre-trained weights.
+
+        The pre-trained weights are automatically loaded.
+
+        See Also
+        --------
+        cheapfake.face_alignment.api : Handles initialization of the Face Alignment Network.
+
+        """
+
+        if hasattr(fan_options, "landmarks_type"):
+            assert fan_options.landmarks_type in [
+                "2D",
+                "3D",
+            ], "Landmarks must be either 2D or 3D."
+            self.landmarks_type = fan_options.landmarks_type
+        else:
+            self.landmarks_type = "2D"
+
+        if self.landmarks_type is "2D":
+            landmarks_type = face_alignment.LandmarksType._2D
+        else:
+            landmarks_type = face_alignment.LandmarksType._3D
+
+        if hasattr(fan_options, "face_detector"):
+            assert fan_options.face_detector in [
+                "sfd",
+                "dlib",
+            ], "Only sfd and dlib are supported for face detection."
+            self.face_detector = fan_options.face_detector
+        else:
+            self.face_detector = "sfd"
+
+        device = "cuda" if "cuda" in self.device.type else "cpu"
+        self.face_alignment_model = face_alignment.FaceAlignment(
+            landmarks_type=self.landmarks_type,
+            device=device,
+            face_detector=self.face_detector,
+            verbose=self.verbose,
+        )
+
+    def forward(self, x):
+        """Performs a forward pass of the input ``x``.
+
+        Parameters
+        ----------
+        x : torch.Tensor instance
+            Torch tensor containing the input to the network. The input to the network should be a list of tensors, [frames, audio, audio_stft]. As of 08/13/2020, the audio is not yet supported since VGGVox has some bugs.
+
+        Returns
+        -------
+        x : torch.Tensor instance
+            Torch tensor containing the output of the network.
+        
+        """
+        lipnet_output = self.lipnet_model(x)
+        fan_output = self.face_alignment_model(x)
+
+        return [lipnet_output, fan_output]
