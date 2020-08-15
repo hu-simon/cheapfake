@@ -2,6 +2,7 @@ import os
 import time
 
 import torch
+import numpy as np
 import face_alignment
 import torch.nn as nn
 import torch.nn.functional as F
@@ -169,6 +170,29 @@ class CheapFake(nn.Module):
             verbose=self.verbose,
         )
 
+    def _permute_fan(self, x):
+        """Permutes the input ``x`` so that it is in the shape expected by the Face Alignment Network (FAN). 
+
+        The input ``x`` is assumed to be of the shape (batch, channel, sample, height, width) which is expected by LipNet. However, the input to the FAN is assumed to be of the shape (batch, sample, channel, height, width). 
+
+        Parameters
+        ----------
+        x : torch.Tensor or numpy.ndarray instance
+            Torch tensor or Numpy array containing the input to be permutted, assumed to have shape (batch, channel, sample, height, width).
+        
+        Returns
+        -------
+        x : torch.Tensor or numpy.ndarray instance
+            Torch tensor or Numpy array containing the permutted input, assumed to have shape (batch, sample, channel, height, width).
+
+        """
+        if isinstance(x, torch.Tensor):
+            x = x.numpy()
+        x = np.einsum("ijklm->ikjlm", x)
+        x = torch.from_numpy(x)
+
+        return x
+
     def forward(self, x):
         """Performs a forward pass of the input ``x``.
 
@@ -184,6 +208,9 @@ class CheapFake(nn.Module):
         
         """
         lipnet_output = self.lipnet_model(x)
-        fan_output = self.face_alignment_model(x)
+        x_permutted = self._permute_fan(x)
+        x_permutted = x_permutted[0]
+        print(x_permutted.shape)
+        fan_output = self.face_alignment_model.get_landmarks_from_batch(x_permutted)
 
         return [lipnet_output, fan_output]

@@ -37,8 +37,8 @@ class LipNet(nn.Module):
         self.fully_connected = nn.Linear(512, 27 + 1)
 
         # The following is original: (96 * 4 * 8, 256, 1, bidirectional=True)
-        # self.gru1 = nn.GRU(96 * 4 * 8, 256, 1, bidirectional=True)
-        self.gru1 = nn.GRU(input_size[0] * input_size[1], 256, 1, bidirectional=True)
+        self.gru1 = nn.GRU(96 * 4 * 8, 256, 1, bidirectional=True)
+        # self.gru1 = nn.GRU(input_size[0] * input_size[1], 256, 1, bidirectional=True)
         self.gru2 = nn.GRU(512, 256, 1, bidirectional=True)
 
         self.relu = nn.ReLU(inplace=True)
