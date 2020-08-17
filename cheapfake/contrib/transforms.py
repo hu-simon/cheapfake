@@ -10,10 +10,6 @@ import cv2
 import torch
 import numpy as np
 
-"""
-Can probabliy just combine the two functions and do the flipping on the for loop.
-"""
-
 
 class BatchRescale(object):
     """Rescales a collection of images in a given sample, to a specified size.
@@ -271,3 +267,65 @@ class BatchResizeNormalize(object):
 
         return transformed_frames
 
+
+def BatchAHE(object):
+    """Performs Adaptive Histogram Equalization on a collection of images.
+    
+    """
+
+    def __init__(
+        self, clip_limit=3.0, tile_size=(8, 8), return_tensor=True, channel_first=True
+    ):
+        """Instantiates a new BatchAHE object.
+        
+        Parameters
+        ----------
+        clip_limit : float, optional
+            The clipping limit for the adaptive histogram operation, by default 3.0.
+        tile_size : tuple of (int, int)
+            Tuple containing the tile size used for the adaptive histogram operation, by default (8, 8).
+        return_tensor : {True, False}, bool, optional
+            If True then the output is returned as a torch.Tensor instance, by default True. Otherwise the output is returned as a numpy.ndarray instance.
+        channel_first : {True, False}, bool, optional
+            If True then the input and output are assumed to be of the shape (sample, channel, height, width), by default True. Otherwise the input and output are assumed to be of the shape (sample, height, width, channel).
+
+        """
+        assert isinstance(clip_limit, float)
+        assert isinstance(tile_size, tuple) and list(map(type, tile_size)) == [int, int]
+        assert isinstance(return_tensor, bool)
+        assert isinstance(channel_first, bool)
+
+        self.return_tensor = return_tensor
+        self.channel_first = channel_first
+
+        self.clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_size)
+
+    def __call__(self, frames):
+        """Equalizes the histogram in an adaptive manner, with clipping, on a collection of images.
+        
+        The input is assumed to either be of the form (sample, channel, height, width) or (sample, height, width, channel).
+
+        Parameters
+        ----------
+        frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the images whose histograms should be equalized.
+
+        Returns
+        -------
+        equalized_frames : numpy.ndarray or torch.Tensor instance
+            Numpy array containing images whose histograms have been adaptively equalized.
+
+        """
+        if self.channel_first:
+            frames = np.einsum("ijkl->iklj")
+
+        equalized_frames = np.empty(frames.shape)
+        for k, image in enumerate(frames):
+            lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+            lab_image[:, :, 0] = self.clahe.apply(lab_image[:, :, 0])
+            equalized_frames[k] = cv2.cvtColor(lab_image, cv2.LAB2RGB)
+
+        if self.return_tensor:
+            return torch.from_numpy(equalized_frames)
+        else:
+            return equalized_frames

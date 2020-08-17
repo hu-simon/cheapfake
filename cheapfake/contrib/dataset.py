@@ -1,5 +1,12 @@
 """
 Python file that creates the necessary objects for training cheapfake.
+<<<<<<< HEAD
+
+Leaving this here, which is also in models.py
+
+Need to rethink the entire forward pass. The idea is as follows.
+
+The resized frames should be sent into FAN, with the expected shape. This returns facial landmarks (if a face is detected). Using the resizing information, we can rescale the predicted facial landmarks to get an overall estimate of where the lips are located in the full-size image. Then, the lip region is extracted from the full-size image (with some buffer room) and gets resized to 64 x 128 which is the size expected by LipNet. The predicted facial features and the embeddings learning by the LipNet are sent into the MLP, along with the audio embeddings learned by the residual network.
 """
 
 import os
