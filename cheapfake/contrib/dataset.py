@@ -1,7 +1,5 @@
 """
 Python file that creates the necessary objects for training cheapfake.
-
-The sanity checks should be removed because they take up a lot of space and not all users are stupid.
 """
 
 import os
@@ -45,7 +43,7 @@ class DeepFakeDataset(Dataset):
         audio_processor=None,
         frames_per_second=30,
         sample_rate=16000,
-        n_seconds=3,
+        n_seconds=3.0,
         channel_first=True,
         frame_transform=None,
         audio_transform=None,
@@ -69,59 +67,44 @@ class DeepFakeDataset(Dataset):
         audio_processor : object, optional
             An object that performs the basic audio processing tasks (see cheapfake.contrib.video_processor.AudioProcessor for naming conventions), by default None. If None, then the audio processor defaults to cheapfake.contrib.video_processor.AudioProcessor.
         frames_per_second : int, optional
-            The frame rate of the video, by default 30. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
+            The frame rate of the video, by default 30. 
         sample_rate : int, optional
-            The sample rate of the audio, by default 16 kHz. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
-        n_seconds : int, optional
-            The number of seconds, passed onto __getitem__(), by default 3 seconds. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
+            The sample rate of the audio, by default 16 kHz. 
+        n_seconds : float, optional
+            The number of seconds, passed onto __getitem__(), by default 3.0 seconds. 
         channel_first : {True, False}, bool, optional
-            If True then all input and output are assumed to have shape ``(T, C, H, W)`` where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. If a non-boolean input is passed then the default value is used.
+            If True then all input and output are assumed to have shape ``(T, C, H, W)`` where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. 
         frame_transform : callable, optional
-            A callable function that is used to transform extracted frames from videos, by default None. If None, then the resizing transform is applied to the frames. If a non-callable function is passed as input, then the default transform is used. The transform must be able to operate on batches (i.e., of shape ``(B, C, H, W)`` or ``(B, H, W, C)``).
+            A callable function that is used to transform extracted frames from videos, by default None. If None, then the resizing transform with factor 4 is applied to the frames. If a non-callable function is passed as input, then the default transform is used. The transform must be able to operate on batches (i.e., of shape ``(B, C, H, W)`` or ``(B, H, W, C)``).
         audio_transform : callable, optional
             A callable function that is used to transform extracted audio from videos, by default None. If None, then no transform is applied to the extracted audio. If a non-callable function is passed as input, then the default transform (i.e. no transform) is used. The transform must be able to operate on batches (i.e., of shape ``(B, C, H, W)`` or ``(B, H, W, C)``).
         return_tensor : {True, False}, bool, optional
-            If True, then this parameter is passed to functions that can return tensors as output, by default True. If a non-boolean parameter is passed as input, then the default value is used.
+            If True, then this parameter is passed to functions that can return tensors as output, by default True. 
         verbose : {False, True}, bool, optional
-            If True then verbose output is sent to the system console. If a non-boolean parameter is passed as input, then the default value is used.
+            If True then verbose output is sent to the system console. 
         random_seed : int, optional
-            The random seed used for reproducibility, by default 41. If a float is passed as input, then it is cast as an int. If a non-float and non-int value is passed as input, then the default value is used.
+            The random seed used for reproducibility, by default 41.
         sequential_frames : {False, True}, bool, optional
-            If True then ``__getitem__`` returns sequential data after an initial index is chosen at random, by default True. Otherwise, ``__getitem__`` returns data that is not guaranteed to be sequential (i.e. each sample is chosen stochastically). If a non-boolean input is passed as input, then the default value is taken.
+            If True then ``__getitem__`` returns sequential data after an initial index is chosen at random, by default True. Otherwise, ``__getitem__`` returns data that is not guaranteed to be sequential (i.e. each sample is chosen stochastically). 
         sequential_audio : {False, True}, bool, optional
-            If True then ``__getitem__`` returns sequential data after an initial index is chosen at random, by default True. Otherwise, ``__getitem__`` returns data that is not guaranteed to be sequential (i.e. each sample is chosen stochastically). If a non-boolean input is passed as input, then the default value is taken.
+            If True then ``__getitem__`` returns sequential data after an initial index is chosen at random, by default True. Otherwise, ``__getitem__`` returns data that is not guaranteed to be sequential (i.e. each sample is chosen stochastically). 
         stochastic : {True, False}, bool, optional
-            If True then ``__getitem__`` returns data using a stochastic selection strategy, by default True. Otherwise, only the first ``n_seconds * frames_per_second`` frames and ``n_seconds * sample_rate`` audio samples are returned. If a non-boolean input is passed as input, then the default value is taken.
+            If True then ``__getitem__`` returns data using a stochastic selection strategy, by default True. Otherwise, only the first ``int(n_seconds * frames_per_second)`` frames and ``int(n_seconds * sample_rate)`` audio samples are returned. 
 
         """
-        if type(frames_per_second) is float:
-            frames_per_second = int(frames_per_second)
-        elif (
-            type(frames_per_second) is not float and type(frames_per_second) is not int
-        ):
-            frames_per_second = 30
-        if type(sample_rate) is float:
-            sample_rate = int(sample_rate)
-        elif type(sample_rate) is not float and type(sample_rate) is not int:
-            sample_rate = 16000
-        if type(n_seconds) is float:
-            n_seconds = int(n_seconds)
-        elif type(n_seconds) is not float and type(n_seconds) is not int:
-            n_seconds = 3
-        if type(return_tensor) is not bool:
-            return_tensor = True
-        if type(verbose) is not bool:
-            verbose = False
-        if type(random_seed) is float:
-            random_seed = int(random_seed)
-        elif type(random_seed) is not float and type(random_seed) is not int:
-            random_seed = 41
-        if type(sequential_frames) is not bool:
-            sequential_frames = False
-        if type(sequential_audio) is not bool:
-            sequential_audio = False
-        if type(stochastic) is not bool:
-            stochastic = True
+        assert isinstance(
+            frames_per_second, int
+        ), "Frames per second must be an integer."
+        assert isinstance(sample_rate, int), "The sample rate must be an integer."
+        assert isinstance(
+            n_seconds, (float, int)
+        ), "The number of seconds must be either a float or an integer."
+        assert isinstance(return_tensor, bool)
+        assert isinstance(verbose, bool)
+        assert isinstance(random_seed, int)
+        assert isinstance(sequential_frames, bool)
+        assert isinstance(sequential_audio, bool)
+        assert isinstance(stochastic, bool)
 
         self.root_path = root_path
 
@@ -383,3 +366,38 @@ class DeepFakeDataset(Dataset):
             # audio_stft = torch.from_numpy(audio_stft)
 
         return frames, audio, audio_stft
+
+
+'''
+    def __getitem__(self, index):
+        """Extracts frames and audio from a video instance.
+        
+        Frames (i.e. set of images) and audio from the video instance is extracted. A specific number of frames from the video stream are extracted, and a specific number of samples from the audio stream are extracted. There is no correlation between the number of frames extracted and the number of audio extracted. 
+
+        All frames and audio samples from the video are extracted and chunked into sizes of ``frames_per_second * n_seconds`` and ``sample_rate * n_seconds``, respectively. 
+
+        Parameters
+        ----------
+        index : int
+            The index corresponding to the video instance.
+        
+        Returns
+        -------
+        frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the frames extracted from the video.
+        audio : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the audio samples extracted from the video.
+        audio_stft : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the Short-Time Fourier Transform (STFT) of the audio signal.
+        
+        """
+        video_path = self.video_paths[index]
+
+        frames = self.videofile_processor.extract_all_frames(video_path=video_path)
+        audio = self.videofile_processor._extract_all_audio(video_path=video_path)
+
+        frames = self.frames_processor.apply_transformation(frames, self.transform)
+        audio = self.audio_processor.apply_transformation(audio, self.audio_transform)
+
+        if self.stochastic:
+'''
