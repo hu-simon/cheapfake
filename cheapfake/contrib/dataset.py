@@ -257,9 +257,9 @@ class DeepFakeDataset(Dataset):
         elements : numpy.ndarray or torch.Tensor
             Numpy array or Torch tensor containing the elements to be chunked.
         length : int, optional
-            The number of elements in each chunk, by default 1. If a float is passed as input, then it is converted to an int. If a non-float or non-int value is passed as input, then the default value is used. If a value less than 1 is passed as input, then the default value is used.
+            The number of elements in each chunk, by default 1. 
         return_tensor : {True, False}, bool, optional
-            If True then the output is returned as a torch.Tensor instance, by default True. Otherwise, the output is returned as a numpy.ndarray instance. If a non-boolean value is passed as input, the default value is used.
+            If True then the output is returned as a torch.Tensor instance, by default True. Otherwise, the output is returned as a numpy.ndarray instance. 
 
         Returns
         -------
@@ -267,14 +267,8 @@ class DeepFakeDataset(Dataset):
             Numpy array or Torch tensor containing the chunked elements, with each element of length ``length``.
 
         """
-        if type(return_tensor) is not bool:
-            return_tensor = True
-        if type(length) is float:
-            length = int(length)
-        if type(length) is not float and type(length) is not int:
-            length = 1
-        if length < 1:
-            length = 1
+        assert isinstance(return_tensor, bool)
+        assert isinstance(length, int)
 
         if type(elements) is torch.Tensor:
             elements = elements.numpy()
@@ -366,38 +360,3 @@ class DeepFakeDataset(Dataset):
             # audio_stft = torch.from_numpy(audio_stft)
 
         return frames, audio, audio_stft
-
-
-'''
-    def __getitem__(self, index):
-        """Extracts frames and audio from a video instance.
-        
-        Frames (i.e. set of images) and audio from the video instance is extracted. A specific number of frames from the video stream are extracted, and a specific number of samples from the audio stream are extracted. There is no correlation between the number of frames extracted and the number of audio extracted. 
-
-        All frames and audio samples from the video are extracted and chunked into sizes of ``frames_per_second * n_seconds`` and ``sample_rate * n_seconds``, respectively. 
-
-        Parameters
-        ----------
-        index : int
-            The index corresponding to the video instance.
-        
-        Returns
-        -------
-        frames : numpy.ndarray or torch.Tensor instance
-            Numpy array or Torch tensor containing the frames extracted from the video.
-        audio : numpy.ndarray or torch.Tensor instance
-            Numpy array or Torch tensor containing the audio samples extracted from the video.
-        audio_stft : numpy.ndarray or torch.Tensor instance
-            Numpy array or Torch tensor containing the Short-Time Fourier Transform (STFT) of the audio signal.
-        
-        """
-        video_path = self.video_paths[index]
-
-        frames = self.videofile_processor.extract_all_frames(video_path=video_path)
-        audio = self.videofile_processor._extract_all_audio(video_path=video_path)
-
-        frames = self.frames_processor.apply_transformation(frames, self.transform)
-        audio = self.audio_processor.apply_transformation(audio, self.audio_transform)
-
-        if self.stochastic:
-'''
