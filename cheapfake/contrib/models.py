@@ -47,7 +47,6 @@ class CheapFake(nn.Module):
 
     def __init__(
         self,
-        input_size=(64, 128),
         dropout_rate=0.5,
         num_modules=1,
         verbose=False,
@@ -199,13 +198,43 @@ class CheapFake(nn.Module):
 
         return x
 
+    def _forward_lipnet(self, x):
+        """Performs a forward pass of the input ``x`` through LipNet.
+
+        Parameters
+        ----------
+        x : torch.Tensor instance 
+            Torch tensor containing the input to the network.
+
+        Returns
+        -------
+        lipnet_features : torch.Tensor instance
+            Torch tensor containing the latent features coming from removing the classification layer from LipNet.
+
+        """
+        pass
+
+    def _forward_fan(self, x):
+        """Performs a forward pass of the input ``x`` through the Face Alignment Network.
+
+        Parameters
+        ----------
+        x : torch.Tensor instance
+            Torch tensor containing the input to the network.
+
+        Returns
+        -------
+
+        """
+        pass
+
     def forward(self, x):
         """Performs a forward pass of the input ``x``.
 
         Parameters
         ----------
         x : torch.Tensor instance
-            Torch tensor containing the input to the network. The input to the network should be a list of tensors, [frames, audio, audio_stft]. As of 08/13/2020, the audio is not yet supported since VGGVox has some bugs.
+            Torch tensor containing the input to the network. The input to the network should be a list of tensors, [frames, audio, audio_stft]. 
 
         Returns
         -------
@@ -213,10 +242,4 @@ class CheapFake(nn.Module):
             Torch tensor containing the output of the network.
         
         """
-        lipnet_output = self.lipnet_model(x)
-        x_permutted = self._permute_fan(x)
-        x_permutted = x_permutted[0]
-        print(x_permutted.shape)
-        fan_output = self.face_alignment_model.get_landmarks_from_batch(x_permutted)
-
-        return [lipnet_output, fan_output]
+        pass

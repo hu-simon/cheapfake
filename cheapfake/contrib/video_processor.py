@@ -580,45 +580,6 @@ class FramesProcessor:
 
         return batch_landmarks
 
-    def sample_stochastic_all(
-        self,
-        video_path,
-        n_samples=1,
-        length=75,
-        channel_first=True,
-        return_rgb=True,
-        random_seed=41,
-        return_all=False,
-    ):
-        """Creates samples of a specific 
-
-        All frames from the video sequence are extracted, and then ``n_samples`` groups of batches of length ``length`` are created and returned as output.
-
-        Parameters
-        ----------
-        video_path : str
-            The absolute path to the video file.
-        n_samples : int, optional
-            The number of samples to collect, by default 1. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
-        length : int, optional
-            The length of each sample (i.e. the number of frames in each sample), by default 75. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is used.
-        channel_first : {True, False}, bool, optional
-            If True then the output has shape ``(T, C, H, W)``, where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. If a non-boolean input is passed, then the default value is taken.
-        return_rgb : {True, False}, bool, optional
-            If True then the output adheres to the RGB color format, by default True. Otherwise the output adheres to the BGR color format. If a non-boolean input is passed then the default value is taken.
-        random_seed : int, optional
-            The random seed used for reproducibility, by default 41. If a float is passed as input then it is cast as an int. If a non-float and non-int value is passed as input then the default value is taken.
-        return_all : {False, True}, bool, optional
-            If True then all samples are returned 
-
-        Returns
-        -------
-        frames : numpy.ndarray instance
-            Numpy array containing a set of frames, stochastically sampled from the video stream.
-        
-        """
-        pass
-
     def sample_frames_stochastic(self, frames, n_samples=75, sequential=True):
         """Stochastically samples ``n_samples`` number of frames. 
 
