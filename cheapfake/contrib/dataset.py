@@ -17,6 +17,7 @@ import glob
 import torch
 import librosa
 import numpy as np
+import pandas as pd
 from torch.utils.data import Dataset
 
 import cheapfake.contrib.transforms as transforms
@@ -43,7 +44,7 @@ class DeepFakeDataset(Dataset):
 
     def __init__(
         self,
-        root_path,
+        metadata_path,
         videofile_processor=None,
         frames_processor=None,
         audio_processor=None,
@@ -64,8 +65,8 @@ class DeepFakeDataset(Dataset):
 
         Parameters
         ----------
-        root_path : str
-            The absolute path to the folder containing the DFDC training data.
+        metadata_path : str
+            The absolute path to the folder containing the DFDC training metadata.
         videofile_processor : object, optional
             An object that performs the basic video processing tasks (see cheapfake.contrib.video_processor.VideoFileProcessor for naming conventions), by default None. If None, then the video processor defaults to cheapfake.contrib.video_processor.VideoFileProcessor.
         frames_processor : object, optional
@@ -77,7 +78,7 @@ class DeepFakeDataset(Dataset):
         sample_rate : int, optional
             The sample rate of the audio, by default 16 kHz. 
         n_seconds : float, optional
-            The number of seconds, passed onto __getitem__(), by default 3.0 seconds. 
+            The number of seconds, passed onto __getitem__(), by default 3.0 seconds.
         channel_first : {True, False}, bool, optional
             If True then all input and output are assumed to have shape ``(T, C, H, W)`` where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. 
         frame_transform : callable, optional
@@ -112,7 +113,7 @@ class DeepFakeDataset(Dataset):
         assert isinstance(sequential_audio, bool)
         assert isinstance(stochastic, bool)
 
-        self.root_path = root_path
+        self.metadata_path = metadata_path
 
         if videofile_processor is None:
             self.videofile_processor = video_processor.VideoFileProcessor(
@@ -156,10 +157,41 @@ class DeepFakeDataset(Dataset):
 
         random.seed(random_seed)
 
-        self.video_paths = self._get_video_paths(root_path=self.root_path)
+        self.video_paths = self._paths_from_df()
+
+        # self.video_paths = self._get_video_paths(root_path=self.root_path)
+
+    def _paths_from_df(self, n_samples=None):
+        """Extracts the video paths corresponding to the data from the DFDC dataset.
+
+        This function assumes that the video paths are contained in a Pandas DataFrame, under the header "File".
+
+        Paramters
+        ---------
+        n_samples : int, optional
+            The number of video paths to extract from the Pandas dataframe, by default None. If None, then all video paths are extracted.
+
+        Returns
+        -------
+        video_paths : pandas.core.series.Series instance
+            Pandas series containing the absolute paths to the videos.
+
+        """
+        assert isinstance(n_samples, (int, type(None)))
+
+        df = pd.read_csv(self.metadata_path)
+
+        if n_samples is None:
+            n_samples = len(df)
+
+        video_paths = df["Files"][:n_samples]
+
+        return video_paths
 
     def _get_video_paths(self, root_path, n_folders=None):
         """Extracts the video paths corresponding to the data from the DFDC dataset.
+
+        This function has been deprecated in favor of _paths_from_df(). 
 
         Parameters
         ----------
@@ -193,6 +225,8 @@ class DeepFakeDataset(Dataset):
         self, frames, scale_factor=4.0, interpolation=cv2.INTER_LANCZOS4
     ):
         """Resizes the frames by a factor of ``scale_factor``.
+
+        This function has been deprecated in favor of object-oriented transforms.
 
         Parameters
         ----------
