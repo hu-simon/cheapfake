@@ -31,6 +31,6 @@ if CURRENT_PYTHON < REQUIRED_PYTHON:
 setup(
     name="cheapfake",
     version="0.0.1",
-    packages=["cheapfake", "cheapfake.utils", "cheapfake.blazeface",],
+    packages=["cheapfake", "cheapfake.utils",],
     zip_safe=False,
 )
