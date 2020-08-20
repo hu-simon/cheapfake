@@ -175,71 +175,124 @@ class CheapFake(nn.Module):
             verbose=self.verbose,
         )
 
-    def _permute_fan(self, x):
-        """Permutes the input ``x`` so that it is in the shape expected by the Face Alignment Network (FAN). 
-
-        The input ``x`` is assumed to be of the shape (batch, channel, sample, height, width) which is expected by LipNet. However, the input to the FAN is assumed to be of the shape (batch, sample, channel, height, width). 
+    def _find_bounding_box(self, points, tol=(2, 2, 2, 2)):
+        """Finds the minimum bounding box containing the points, with tolerance in all directions.
 
         Parameters
         ----------
-        x : torch.Tensor or numpy.ndarray instance
-            Torch tensor or Numpy array containing the input to be permutted, assumed to have shape (batch, channel, sample, height, width).
+        points : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the predicted xy-coordinates of the detected facial landmarks.
+        tol : tuple or int, optional
+            The tolerance (in pixels) in each direction (left, top, right, bottom), by default (2, 2, 2, 2). If an integer is passed then all directions take on this value.
         
         Returns
         -------
-        x : torch.Tensor or numpy.ndarray instance
-            Torch tensor or Numpy array containing the permutted input, assumed to have shape (batch, sample, channel, height, width).
+        bbox : tuple
+            Tuple (min_x, min_y, max_x, max_y) containing the coordinates of the bounding box, with tolerance in each direction.
 
         """
-        if isinstance(x, torch.Tensor):
-            x = x.numpy()
-        x = np.einsum("ijklm->ikjlm", x)
-        x = torch.from_numpy(x)
+        assert isinstance(tol, (int, tuple))
+        if isinstance(tol, tuple):
+            assert len(tol) == 4, "Need at least four tolerances."
+        if isinstance(tol, int):
+            tol = (tol, tol, tol, tol)
 
-        return x
+        x_coords, y_coords = zip(*points)
+        bbox = (
+            min(x_coords) - tol[0],
+            min(y_coords) - tol[1],
+            max(x_coords) + tol[2],
+            max(y_coords) + tol[3],
+        )
+        bbox = tuple([int(item) for item in bbox])
 
-    def _forward_lipnet(self, x):
-        """Performs a forward pass of the input ``x`` through LipNet.
+        return bbox
+
+    def _find_bounding_boxes(self, landmarks, tol=(2, 2, 2, 2)):
+        """Find the minimum bounding boxes for a batch of facial landmarks.
 
         Parameters
         ----------
-        x : torch.Tensor instance 
-            Torch tensor containing the input to the network.
-
+        landmarks : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the xy-coordinates of the detected facial landmarks.
+        tol : tuple or int, optional
+            The tolerance (in pixels) in each direction (left, top, right, bottom), by default (2, 2, 2, 2). If an integer is passed then all directions take on this value.
+        
         Returns
         -------
-        lipnet_features : torch.Tensor instance
-            Torch tensor containing the latent features coming from removing the classification layer from LipNet.
+        bboxes : list (of tuples)
+            List containing tuples containing the coordinates of the bounding box.
 
         """
-        pass
+        bboxes = list()
+        landmarks = landmarks[:, 48:68]
+        for landmark in landmarks:
+            bboxes.append(self._find_bounding_box(points=landmark, tol=tol))
 
-    def _forward_fan(self, x):
-        """Performs a forward pass of the input ``x`` through the Face Alignment Network.
+        return bboxes
+
+    def _crop_lips(
+        self, frames, landmarks, tol=(2, 2, 2, 2), channels_first=True,
+    ):
+        """Crops the lip area from a batch of frames. 
 
         Parameters
         ----------
-        x : torch.Tensor instance
-            Torch tensor containing the input to the network.
-
+        frames : torch.Tensor instance
+            Torch tensor instance containing the frames to crop the lip areas from. 
+        landmarks : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the xy-coordinates of the detected facial landmarks.
+        tol : int or tuple, optional
+            The tolerance (in pixels) in each direction (left, top, right, bottom), by default (2, 2, 2, 2). If an integer is passed then all directions take on this value.
+        channels_first : {True, False}, bool, optional
+            If True then the input and output are assumed to have shape (sample, channel, height, width), by default True. Otherwise, the input and output are assumed to have shape (sample, height, width, channel).
+        
         Returns
         -------
+        cropped_frames : numpy.ndarray or torch.Tensor instance
+            Numpy array or Torch tensor containing the cropped lips.
 
         """
-        pass
+        assert isinstance(tol, (int, tuple))
+        assert isinstance(frames, torch.Tensor)
+        assert isinstance(channels_first, bool)
+
+        if isinstance(tol, tuple):
+            assert len(tol) == 4, "Need at least four tolerances."
+        if isinstance(tol, int):
+            tol = (tol, tol, tol, tol)
+
+        if channels_first:
+            frames = np.einsum("ijkl->iklj", frames.cpu().numpy())
+
+        bboxes = self._find_bounding_boxes(landmarks=landmarks, tol=tol)
+
+        cropped_frames = torch.empty(frames.shape[0], 64, 128, frames.shape[-1])
+        for k, (bbox, frame) in enumerate(zip(bboxes, frames)):
+            cropped_frame = frame[bbox[1] : bbox[3], bbox[0] : bbox[2], :]
+            cropped_frames[k] = torch.from_numpy(
+                cv2.resize(
+                    cropped_frame, dsize=(128, 64), interpolation=cv2.INTER_CUBIC
+                )
+            )
+
+        return cropped_frames
 
     def forward(self, x):
-        """Performs a forward pass of the input ``x``.
+        """Performs a forward pass of the input ``x`` through the network.
 
         Parameters
         ----------
         x : torch.Tensor instance
-            Torch tensor containing the input to the network. The input to the network should be a list of tensors, [frames, audio, audio_stft]. 
-
+            Torch tensor containing the input to the network.
+        
         Returns
         -------
-        x : torch.Tensor instance
-            Torch tensor containing the output of the network.
-        
+        Figure this out.
+
         """
-        pass
+        fan_output = self.face_alignment_model.get_landmarks_from_batch(x)
+        fan_output = np.asarray(fan_output).squeeze(axis=1)
+        cropped_lips = np.asarray(fan_output).squeeze(axis=1)
+
+        return fan_output, cropped_lips
