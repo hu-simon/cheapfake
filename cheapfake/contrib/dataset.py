@@ -389,14 +389,11 @@ class DeepFakeDataset(Dataset):
             frames = frames[0 : self.n_seconds * self.frames_per_second]
             audio = audio[0 : self.n_seconds * self.sample_rate]
 
-        # frames = self._permute_for_lipnet(frames)
         audio_stft = self.audio_processor.extract_stft(
             audio, return_torch=self.return_tensor
         )
 
         if self.return_tensor:
-            # frames = torch.from_numpy(frames)
             audio = torch.from_numpy(audio)
-            # audio_stft = torch.from_numpy(audio_stft)
 
         return frames, audio, audio_stft

@@ -7,6 +7,7 @@ The resized frames should be sent into FAN, with the expected shape. This return
 import os
 import time
 
+import cv2
 import torch
 import numpy as np
 import face_alignment
@@ -292,7 +293,8 @@ class CheapFake(nn.Module):
 
         """
         fan_output = self.face_alignment_model.get_landmarks_from_batch(x)
+        print(len(fan_output))
         fan_output = np.asarray(fan_output).squeeze(axis=1)
-        cropped_lips = np.asarray(fan_output).squeeze(axis=1)
+        cropped_lips = self._crop_lips(x, fan_output)
 
         return fan_output, cropped_lips
