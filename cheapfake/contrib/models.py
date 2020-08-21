@@ -6,6 +6,7 @@ The resized frames should be sent into FAN, with the expected shape. This return
 
 import os
 import time
+import enum
 
 import cv2
 import torch
@@ -22,11 +23,71 @@ lipnet_options = __import__("lipnet_config")
 fan_options = __import__("face_alignment_config")
 
 
+class NetworkType(enum.Enum):
+    FAN = 1
+    LIPNET = 2
+    RESNETAUDIO = 3
+
+
+class FeaturesEncoder(nn.Module):
+    """Implements a feature encoder to create embeddings that can fit into a multi-layer perceptron.
+
+    """
+
+    def __init__(self, network_type=NetworkType.FAN):
+        """Instantiates a new FeatureEncoder object.
+
+        Parameters
+        ----------
+        network_type : cheapfake.contrib.models.NetworkType instance, optional
+            The type of network to instantiate, by default NetworkType.FAN. The supported options are NetworkType.FAN, NetworkType.LIPNET, and NetworkType.RESNETAUDIO.
+
+        """
+        super(FeaturesEncoder, self).__init__()
+
+        assert network_type.value in (1, 2, 3), "Network architecture not supported."
+
+        # FAN.
+        # For this model we are going to assume the coordinates are an image with shape (75, 68, 2) i.e. there are two channels.
+        if network_type.value == 1:
+            self.conv1 = nn.Conv2d(2, 4, kernel_size=3, stride=1, padding=1)
+            self.batchnorm1 = nn.BatchNorm2d(4)
+            self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+            self.conv2 = nn.Conv2d(4, 4, kernel_size=3, stride=1, padding=1)
+            self.batchnorm2 = nn.BatchNorm2d(4)
+            self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+            self.flatten = nn.Flatten()
+            self.fc1 = nn.Linear(4 * 18 * 17, 256)
+            self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        """Performs a forward pass of the input ``x`` through the network.
+
+        Parameters
+        ----------
+        x : torch.Tensor instance
+            Torch tensor containing the input to the network.
+
+        """
+        x = self.conv1(x)
+        x = self.batchnorm1(x)
+        x = self.maxpool1(x)
+        x = self.conv2(x)
+        x = self.batchnorm2(x)
+        x = self.maxpool2(x)
+        x = self.flatten(x)
+        x = self.fc1(x)
+        x = self.relu(x)
+
+        return x
+
+
 class MLP(nn.Module):
     """Implements the Multi-Layer Perceptron network used at the end of the CheapFake network.
 
     """
 
+    # For this network, we are going to havae an input of shape (3 x 256) where we have concatenated the outputs from the three networks. Then this can just be a few network layers if we want.
     def __init__(self, verbose=False):
         """Instantiates a new MLP object.
 
