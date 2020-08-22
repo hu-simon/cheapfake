@@ -46,7 +46,9 @@ class FeaturesEncoder(nn.Module):
         super(FeaturesEncoder, self).__init__()
 
         assert network_type.value in (1, 2, 3), "Network architecture not supported."
-
+        
+        self.network_type = network_type
+        
         # FAN.
         # For this model we are going to assume the coordinates are an image with shape (75, 68, 2) i.e. there are two channels.
         if network_type.value == 1:
@@ -59,7 +61,17 @@ class FeaturesEncoder(nn.Module):
             self.flatten = nn.Flatten()
             self.fc1 = nn.Linear(4 * 18 * 17, 256)
             self.relu = nn.ReLU(inplace=True)
-
+        elif network_type.value == 2:
+            self.conv1 = torch.nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1)
+            self.batchnorm1 = torch.nn.BatchNorm2d(16)
+            self.maxpool1 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+            self.conv2 = torch.nn.Conv2d(16, 25, kernel_size=3, stride=1, padding=1)
+            self.batchnorm2 = torch.nn.BatchNorm2d(25)
+            self.maxpool2 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+            self.flatten = torch.nn.Flatten()
+            self.fc1 = torch.nn.Linear(25 * 18 * 128, 256)
+            self.relu = torch.nn.ReLU(inplace=True)
+        
     def forward(self, x):
         """Performs a forward pass of the input ``x`` through the network.
 
@@ -69,16 +81,26 @@ class FeaturesEncoder(nn.Module):
             Torch tensor containing the input to the network.
 
         """
-        x = self.conv1(x)
-        x = self.batchnorm1(x)
-        x = self.maxpool1(x)
-        x = self.conv2(x)
-        x = self.batchnorm2(x)
-        x = self.maxpool2(x)
-        x = self.flatten(x)
-        x = self.fc1(x)
-        x = self.relu(x)
-
+        if self.network_type.value == 1:
+            x = self.conv1(x)
+            x = self.batchnorm1(x)
+            x = self.maxpool1(x)
+            x = self.conv2(x)
+            x = self.batchnorm2(x)
+            x = self.maxpool2(x)
+            x = self.flatten(x)
+            x = self.fc1(x)
+            x = self.relu(x)
+        elif self.network_type.value == 2:
+            x = self.conv1(x)
+            x = self.batchnorm1(x)
+            x = self.maxpool1(x)
+            x = self.conv2(x)
+            x = self.batchnorm2(x)
+            x = self.maxpool2(x)
+            x = self.flatten(x)
+            x = self.fc1(x)
+            x = self.relu(x)
         return x
 
 
@@ -145,6 +167,7 @@ class CheapFake(nn.Module):
 
         self._load_lipnet()
         self._load_fan()
+        self._load_encoder()
 
     def _load_lipnet(self, load_weights=True):
         """Creates a new instance of the LipNet model and also loads pre-trained weights if they are available.
@@ -157,7 +180,7 @@ class CheapFake(nn.Module):
         """
         assert isinstance(load_weights, bool)
 
-        self.lipnet_model = lipnet.LipNet()
+        self.lipnet_model = lipnet.LipNet(verbose=self.verbose)
         self.lipnet_model.to(self.device)
         self.lipnet_model.eval()
 
@@ -215,7 +238,7 @@ class CheapFake(nn.Module):
         else:
             self.landmarks_type = "2D"
 
-        if self.landmarks_type is "2D":
+        if self.landmarks_type == "2D":
             landmarks_type = face_alignment.LandmarksType._2D
         else:
             landmarks_type = face_alignment.LandmarksType._3D
@@ -236,6 +259,14 @@ class CheapFake(nn.Module):
             face_detector=self.face_detector,
             verbose=self.verbose,
         )
+    
+    def _load_encoder(self):
+        """Creates a new instance of the encoder model and loads any pretrained weights.
+        
+        """
+        self.fan_encoder = FeaturesEncoder(NetworkType.FAN).to(self.device)
+        self.lipnet_encoder = FeaturesEncoder(NetworkType.LIPNET).to(self.device)
+        # Load any weights here.
 
     def _find_bounding_box(self, points, tol=(2, 2, 2, 2)):
         """Finds the minimum bounding box containing the points, with tolerance in all directions.
@@ -354,8 +385,17 @@ class CheapFake(nn.Module):
 
         """
         fan_output = self.face_alignment_model.get_landmarks_from_batch(x)
-        print(len(fan_output))
         fan_output = np.asarray(fan_output).squeeze(axis=1)
         cropped_lips = self._crop_lips(x, fan_output)
-
-        return fan_output, cropped_lips
+        permuted_fan_output = np.einsum("ijk->kij", fan_output)
+        permuted_fan_output = permuted_fan_output[None, :, :, :]
+        fan_embedding = self.fan_encoder(torch.from_numpy(permuted_fan_output).float().cuda())
+        cropped_lips = np.einsum("ijkl->lijk", cropped_lips)
+        cropped_lips = cropped_lips[None, :, :, :]
+        cropped_lips = torch.from_numpy(cropped_lips)
+        lipnet_embedding = self.lipnet_model(cropped_lips.float().cuda())
+        lipnet_embedding = torch.squeeze(lipnet_embedding, axis=1)
+        lipnet_embedding = self.lipnet_encoder(lipnet_embedding[None, :, :, None].permute(0, -1, 1, 2).float().to(self.device))
+        
+        
+        return fan_output, fan_embedding, lipnet_embedding
