@@ -371,22 +371,24 @@ class CheapFake(nn.Module):
 
         return cropped_frames
 
-    def forward(self, x):
+    def forward(self, frames, audio):
         """Performs a forward pass of the input ``x`` through the network.
 
         Parameters
         ----------
-        x : torch.Tensor instance
-            Torch tensor containing the input to the network.
+        frames : torch.Tensor instance
+            Torch tensor containing the input, frames from a video, to the network.
+        audio : torch.Tensor instance
+            Torch tensor containing the input, audio from a video, to the network.
         
         Returns
         -------
         Figure this out.
 
         """
-        fan_output = self.face_alignment_model.get_landmarks_from_batch(x)
+        fan_output = self.face_alignment_model.get_landmarks_from_batch(frames)
         fan_output = np.asarray(fan_output).squeeze(axis=1)
-        cropped_lips = self._crop_lips(x, fan_output)
+        cropped_lips = self._crop_lips(frames, fan_output)
         permuted_fan_output = np.einsum("ijk->kij", fan_output)
         permuted_fan_output = permuted_fan_output[None, :, :, :]
         fan_embedding = self.fan_encoder(torch.from_numpy(permuted_fan_output).float().cuda())
@@ -396,6 +398,8 @@ class CheapFake(nn.Module):
         lipnet_embedding = self.lipnet_model(cropped_lips.float().cuda())
         lipnet_embedding = torch.squeeze(lipnet_embedding, axis=1)
         lipnet_embedding = self.lipnet_encoder(lipnet_embedding[None, :, :, None].permute(0, -1, 1, 2).float().to(self.device))
+        
+        # Need to include the audio in here as well.
         
         
         return fan_output, fan_embedding, lipnet_embedding
