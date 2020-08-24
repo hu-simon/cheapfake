@@ -157,14 +157,14 @@ class DeepFakeDataset(Dataset):
 
         random.seed(random_seed)
 
-        self.video_paths = self._paths_from_df()
+        self.video_paths, self.video_labels = self._data_from_df()
 
         # self.video_paths = self._get_video_paths(root_path=self.root_path)
 
-    def _paths_from_df(self, n_samples=None):
-        """Extracts the video paths corresponding to the data from the DFDC dataset.
+    def _data_from_df(self, n_samples=None):
+        """Extracts the video paths and video labels (i.e. real or fake) corresponding to the data from the DFDC dataset.
 
-        This function assumes that the video paths are contained in a Pandas DataFrame, under the header "File".
+        This function assumes that the video paths are contained in a Pandas DataFrame, under the header "File", and the video labels under the header "label"
 
         Paramters
         ---------
@@ -185,109 +185,9 @@ class DeepFakeDataset(Dataset):
             n_samples = len(df)
 
         video_paths = df["Files"][:n_samples]
+        video_labels = df["label"][:n_samples]
 
-        return video_paths
-
-    def _get_video_paths(self, root_path, n_folders=None):
-        """Extracts the video paths corresponding to the data from the DFDC dataset.
-
-        This function has been deprecated in favor of _paths_from_df(). 
-
-        Parameters
-        ----------
-        root_path : str
-            The absolute path to the folder containing the DFDC data.
-        n_folders : int, None
-            The number of folders to consider, by default None. If None, then ``n_folders`` defaults to all the folders. If a float is passed as input, then it is converted to an int. If a non-float and non-integer is passed as input, then the default value is used.
-
-        Returns
-        -------
-        video_paths : list
-            List containing the absolute paths to the video files, from the DFDC data.
-        
-        """
-        if type(n_folders) is float:
-            n_folders = int(n_folders)
-        if type(n_folders) is not float and type(n_folders) is not int:
-            n_folders = None
-
-        root_folders = [f for f in glob.glob(os.path.join(root_path, "*"))]
-        if n_folders is None:
-            n_folders = len(root_folders)
-        root_folders = root_folders[:n_folders]
-
-        video_paths = [glob.glob(os.path.join(folder, "*")) for folder in root_folders]
-        video_paths = [item for sublist in video_paths for item in sublist]
-
-        return video_paths
-
-    def _resize_frames(
-        self, frames, scale_factor=4.0, interpolation=cv2.INTER_LANCZOS4
-    ):
-        """Resizes the frames by a factor of ``scale_factor``.
-
-        This function has been deprecated in favor of object-oriented transforms.
-
-        Parameters
-        ----------
-        frames : numpy.ndarray or torch.Tensor instance
-            Numpy array or Torch tensor containing the frames.
-        scale_factor : float, optional
-            The scaling factor used to determine the new frame heights and widths, by default 4.0. If an int is sent as input, then it is cast as a float. If a non-float and non-int value is sent as input, then the default value is used.
-        interpolation : int, optional
-            OpenCV interpolation method, passed onto cv2.resize().
-        
-        Returns
-        -------
-        resized_frames : numpy.ndarray or torch.Tensor instance
-            Numpy array or Torch tensor containing the resized frames.
-
-        """
-        if self.channel_first:
-            frames = np.einsum("ijkl->iklj", frames)
-
-        (new_height, new_width) = frames[0].shape[:2]
-        new_height = int(new_height / scale_factor)
-        new_width = int(new_width / scale_factor)
-
-        resized_frames = np.empty((frames.shape[0], new_height, new_width, 3))
-        for k, frame in enumerate(frames):
-            resized_frames[k] = cv2.resize(
-                frame, dsize=(new_width, new_height), interpolation=interpolation
-            )
-
-        if self.channel_first:
-            resized_frames = np.einsum("ijkl->iljk", resized_frames)
-        if self.return_tensor:
-            resized_frames = torch.from_numpy(resized_frames)
-
-        return resized_frames
-
-    def _permute_for_lipnet(self, frames):
-        """Permutes the dimensions of ``frames`` so that it fits within what is expected by LipNet.
-
-        ``frames`` should have shape (sample, color, height, width) and by the end, ``frames`` will have shape (color, sample, height, width). 
-    
-        Parameters
-        ----------
-        frames : numpy.ndarray or torch.Tensor instance
-            Numpy array or Torch tensor containing the frames, with shape (sample, color, height, width).
-        
-        Returns
-        -------
-        frames : numpy.ndarray
-            Numpy array containing the frames, with shape (color, sample, height, width).
-
-        Notes
-        -----
-        If a torch.Tensor instance is passed in, it is first converted to a Numpy array to take advantage of speed boosts.
-
-        """
-        if type(frames) is torch.Tensor:
-            frames = frames.numpy()
-        frames = np.einsum("ijkl->jikl", frames)
-
-        return frames
+        return video_paths, video_labels
 
     def _chunk_elements(self, elements, length=1, return_tensor=True):
         """Chunks a numpy.ndarray or torch.Tensor into smaller elements.
@@ -358,6 +258,8 @@ class DeepFakeDataset(Dataset):
             Numpy array or Torch tensor containing the audio samples extracted from the video.
         audio_stft : numpy.ndarray or torch.Tensor instance
             Numpy array or Torch tensor containing the Short-Time Fourier Transform (STFT) of the audio signal.
+        label : {0, 1}, int
+            The label of the video (i.e. if the video is fake or real). 
 
         Notes
         -----
@@ -365,6 +267,7 @@ class DeepFakeDataset(Dataset):
 
         """
         video_path = self.video_paths[index]
+        video_label = self.video_labels[index]
 
         frames = self.videofile_processor.extract_all_frames(video_path=video_path)
         audio = self.videofile_processor._extract_all_audio(video_path=video_path)
@@ -396,4 +299,4 @@ class DeepFakeDataset(Dataset):
         if self.return_tensor:
             audio = torch.from_numpy(audio)
 
-        return frames, audio, audio_stft
+        return frames, audio, audio_stft, video_label

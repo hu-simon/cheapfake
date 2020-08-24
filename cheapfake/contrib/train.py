@@ -197,11 +197,10 @@ def train_model(
         audio_model.train()
 
         for batch_idx, batch in enumerate(dataloader):
-            frames, audio, audio_stft = batch
+            frames, _, audio_stft = batch
 
             frames = frames.float().to(device)
-            audio = audio.float().to(device)
-            audio_stft = audio.float().to(device)
+            audio_stft = audio_stft.float().to(device)
 
             face_model.train()
             frames_model.train()
@@ -211,12 +210,13 @@ def train_model(
 
             landmarks, face_embedding = face_model(frames)
             extracted_lips = _crop_lips(frames, landmarks)
-            frames_embedding = frames_model(extracted_lips)
-
+            frame_embedding = frames_model(extracted_lips)
             audio_embedding = audio_model(audio_stft.view(audio_stft.shape[0], -1))
 
             print(
-                "\nFace Embedding Size: {}\nFrames Embedding Size:{}\nAudio Embeddings Size:{}".format(
-                    face_embedding.size, frames_embedding.size, audio_embedding.size
+                "\nFace Embedding Size: {}\nFrames Embedding Size: {}\nAudio Embedding Size: {}".format(
+                    face_embedding.shape, frame_embedding.shape, audio_embedding.shape
                 )
             )
+
+            # Compute the loss and then take the gradient step. Compute some verbose output if you want, especially if the user requests it.

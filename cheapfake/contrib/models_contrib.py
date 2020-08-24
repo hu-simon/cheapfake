@@ -259,15 +259,17 @@ class AugmentedLipNet(nn.Module):
                     len(pretrained_dict), len(model_dict)
                 )
             )
-        
-        model_dict.update(pretrained_dict)
-        self.lipnet_model.load_state_dict(model_dict)
-    else:
-        print("[WARNING] Invalid path to pre-trained weights, and thus no weights will be loaded.")
+
+            model_dict.update(pretrained_dict)
+            self.lipnet_model.load_state_dict(model_dict)
+        else:
+            print(
+                "[WARNING] Invalid path to pre-trained weights, and thus no weights will be loaded."
+            )
 
     def _load_encoder_weights(self):
         pass
-    
+
     def forward(self, x):
         """Performs a forward pass of the input ``x`` through the network.
 
@@ -285,7 +287,60 @@ class AugmentedLipNet(nn.Module):
         x = self.lipnet_model(x)
         x = torch.squeeze(x, axis=1)
         x = x.permute(0, -1, 1, 2).float().to(self.device)
-        
+
         lipnet_embedding = self.encoder_model(x)
 
         return lipnet_embedding
+
+
+class AugmentedResNetSE34L(nn.Module):
+    """Augmented ResNetSE34L that includes a feature embedding network that acts on the output of ResNetSE34L. 
+
+    """
+
+    def __init__(self, num_out=256, device=torch.device("cpu"), verbose=True, **kwargs):
+        """Instantiates a new AugmentedResNetSE34L object.
+
+        Parameters
+        ----------
+        num_out : int, optional
+            The number of output features, by default 256.
+        device : torch.device instance
+            The device on which all procedures are carried out, by default torch.device("cpu").
+        verbose : bool, optional
+            If True then verbose output is printed to the system console.
+        **kwargs
+            Arguments passed onto i2ai.mmid.models.ResNetSE34L.
+        
+        """
+        super(AugmentedResNetSE34L, self).__init__()
+
+        assert isinstance(num_out, int)
+        assert isinstance(device, torch.device)
+        assert isinstance(verbose, bool)
+
+        self.num_out = num_out
+        self.device = device
+        self.verbose = verbose
+
+        self.resnet_model = mmid.audio_models.ResNetSE34L(nOut=num_out).to(self.device)
+
+        # No encoder model for now...
+
+    def forward(self, x):
+        """Performs a forward pass of the input ``x`` through the network.
+
+        Parameters
+        ----------
+        x : torch.Tensor instance
+            Torch tensor containing the input to the network.
+
+        Returns
+        -------
+        x : torch.Tensor instance
+            Torch tensor containing the audio embeddings.
+
+        """
+        x = self.resnet_model(x)
+
+        return x
