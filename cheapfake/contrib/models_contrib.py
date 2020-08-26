@@ -64,8 +64,12 @@ class FeaturesEncoder(nn.Module):
             self.maxpool2 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
             self.flatten = torch.nn.Flatten()
             self.fc1 = torch.nn.Linear(25 * 18 * 128, int((25 * 18 * 128) / 4))
-            self.fc2 = torch.nn.Linear(int((25 * 18 * 128) / 4), int((25 * 18 * 128) / 16))
-            self.fc3 = torch.nn.Linear(int((25 * 18 * 128) / 16), int((25 * 18 * 128) / 64))
+            self.fc2 = torch.nn.Linear(
+                int((25 * 18 * 128) / 4), int((25 * 18 * 128) / 16)
+            )
+            self.fc3 = torch.nn.Linear(
+                int((25 * 18 * 128) / 16), int((25 * 18 * 128) / 64)
+            )
             self.fc4 = torch.nn.Linear(int((25 * 18 * 128) / 64), 256)
             self.relu = torch.nn.ReLU(inplace=True)
 
@@ -174,7 +178,9 @@ class AugmentedFAN(nn.Module):
             face_detector=self.face_detector,
             verbose=self.verbose,
         )
-        self.encoder_model = FeaturesEncoder(network_type=NetworkType.face_alignment).to(self.device)
+        self.encoder_model = FeaturesEncoder(
+            network_type=NetworkType.face_alignment
+        ).to(self.device)
 
     def _load_encoder_weights(self):
         pass
@@ -199,26 +205,26 @@ class AugmentedFAN(nn.Module):
         face_embeddings = list()
         for batch in x:
             landmark = self.face_alignment_model.get_landmarks_from_batch(batch)
-            
+
             # Compute the FAN embeddings.
             landmark = torch.Tensor(landmark)
             if landmark.shape[1] != 1:
                 landmark = landmark[:, :1, :, :]
             landmarks.append(landmark)
             landmark = landmark.permute(1, 3, 0, 2).float().to(self.device)
-            #landmark = landmark[None, :, :, :].float().to(self.device)
-            
+            # landmark = landmark[None, :, :, :].float().to(self.device)
+
             face_embedding = self.encoder_model(landmark)
             face_embeddings.append(face_embedding)
-            
+
         landmarks = torch.stack(landmarks)
         landmarks = landmarks.squeeze(axis=2).float().to(self.device)
-        
+
         face_embeddings = torch.stack(face_embeddings).float().to(self.device)
-        
+
         return landmarks, face_embeddings
-        #return landmarks   
-            
+        # return landmarks
+
 
 class AugmentedLipNet(nn.Module):
     """Augmented LipNet that includes a feature embedding network that acts on the output of LipNet.
@@ -317,6 +323,151 @@ class AugmentedLipNet(nn.Module):
         lipnet_embedding = lipnet_embedding[:, None, :].float().to(self.device)
 
         return lipnet_embedding
+
+    @staticmethod
+    def _find_bounding_box(landmarks, tol=(2, 2, 2, 2)):
+        """Computes the minimum bounding box containing ``landmarks``, with tolerance (in pixels) in the left, right, top, and bottom directions.
+
+        Parameters
+        ----------
+        landmarks : torch.Tensor instance
+            Torch tensor containing the xy-coordinates of the facial landmarks.
+        tol : tuple, optional
+            The tolerance (in pixels) in each direction (left, top, right, bottom) for the cropping operation, by default (2, 2, 2, 2).
+
+        Returns
+        -------
+        bbox : tuple (of ints)
+            Tuple (min_x, min_y, max_x, max_y) containing the coordinates of the minimum bounding box with tolerance (in pixels) in the left, top, right, and bottom directions.
+
+        """
+        assert isinstance(tol, tuple)
+        assert len(tol) == 4, "Only four values can be specified for the tolerance."
+
+        x_coords, y_coords = zip(*landmarks)
+        bbox = (
+            min(x_coords) - tol[0],
+            min(y_coords) - tol[1],
+            max(x_coords) + tol[2],
+            max(y_coords) + tol[2],
+        )
+        bbox = tuple([int(item) for item in bbox])
+
+        return bbox
+
+    @staticmethod
+    def _find_bounding_box_batch(batch_landmarks, tol=(2, 2, 2, 2)):
+        """Computes the minimum bounding box containing ``batch_landmarks``, with tolerances (in pixels) in the left, right, top, and bottom directions, for a batch of images.
+
+        It is assumed that the batch dimension is the first dimension.
+
+        Parameters
+        ----------
+        batch_landmarks : torch.Tensor instance
+            Torch tensor containing a batch of xy-coordinates of the facial landmarks.
+        tol : tuple, optional
+            The tolerance (in pixels) in each direction (left, top, right, bottom) for the cropping operation, by default (2, 2, 2, 2).
+        
+        Returns
+        -------
+        batch_bbox : list (of tuples)
+            List containing tuples of xy-coordinates of the bounding boxes for the batch of facial landmarks.
+        
+        """
+        batch_bbox = [None] * batch_landmarks.shape[0]
+        batch_landmarks = batch_landmarks[:, 48:68]
+        for landmark in batch_landmarks:
+            batch_bbox.append(_find_bounding_box(landmark, tol))
+
+        return batch_bbox
+
+    @staticmethod
+    def _crop_lips(frames, landmarks, tol=(2, 2, 2, 2), channels_first=True):
+        """Crops the lip area from a batch of frames.
+
+        Parameters
+        ----------
+        frames : torch.Tensor instance
+            Torch tensor instance containing frames for cropping the lip area.
+        landmarks : torch.Tensor instance
+            Torch tensor containing the xy-coordinates of the facial landmarks.
+        tol : tuple, optional
+            The tolerance (in pixels) in each direction (left, top, right, bottom) for the cropping operation, by default (2, 2, 2, 2)
+        channels_first : bool, optional
+            If True then the input and output are assumed to have the channel dimension come before the spatial dimensions.
+        
+        Returns
+        -------
+        cropped_frames : torch.Tensor instance
+            Torch tensor containing the cropped lip areas.
+
+        """
+        assert isinstance(tol, tuple)
+        assert len(tol) == 4, "Only four values can be specified for the tolerance."
+        assert isinstance(channels_first, bool)
+
+        if channels_first:
+            frames = frames.permute(0, 2, 3, 1)
+
+        bboxes = _find_bounding_box(landmarks=landmarks, tol=tol)
+
+        output_shape = (frames.shape[0], 64, 128, 3)
+        extracted_lips = torch.empty(output_shape)
+        for idx, (bbox, frame) in enumerate(zip(bboxes, frames)):
+            extracted_lip = frame[bbox[1] : bbox[3], bbox[0] : bbox[2], :]
+            extracted_lips[idx] = torch.from_numpy(
+                cv2.resize(
+                    extracted_lip.cpu().numpy(),
+                    dsize=(128, 64),
+                    interpolation=cv2.INTER_CUBIC,
+                )
+            )
+
+        return extracted_lips
+
+    @staticmethod
+    def _crop_lips_batch(
+        batch_frames, batch_landmarks, tol=(2, 2, 2, 2), channels_first=True
+    ):
+        """Crops the lip area for a batch of batch of frames.
+
+        It is assumed that the batch dimension is the first dimension.
+
+        Parameters
+        ----------
+        batch_frames : torch.Tensor instance
+            Torch tensor containing the batch of frames. 
+        batch_landmarks : torch.Tensor instance 
+            Torch tensor containing the batch of xy-coordinates of the facial landmarks.
+        tol : tuple, optional
+            The tolerance (in pixels) in each direction (left, top, right, bottom) for the cropping operation, by default (2, 2, 2, 2)
+        channels_first : bool, optional
+            If True then the input and output are assumed to have the channel dimension come before the spatial dimensions.
+
+        Returns
+        -------
+        batch_extracted_lips : torch.Tensor instance
+            Torch tensor containing a batch of cropped lip areas.
+
+        """
+        assert isinstance(tol, tuple)
+        assert len(tol) == 4, "Only four values can be specified for the tolerance"
+        assert isinstance(channels_first, bool)
+
+        output_shape = (
+            batch_frames.shape[0],
+            batch_frames.shape[1],
+            64,
+            128,
+            batch_frames.shape[2],
+        )
+        batch_extracted_lips = torch.empty(output_shape)
+        for idx, (frames, landmarks) in enumerate(zip(batch_frames, batch_landmarks)):
+            batch_extracted_lips[idx] = _crop_lips(
+                frames, landmarks, tol=tol, channels_first=channels_first
+            )
+
+        return batch_extracted_lips
 
 
 class AugmentedResNetSE34L(nn.Module):

@@ -6,114 +6,26 @@ import os
 import time
 from pathlib import Path
 
+import cv2
 import torch
-import numpy as np
-import torch.nn as nn
-
 from tqdm import tqdm
-import matplotlib.pyplot as plt
+from torch.utils.data.dataloader import DataLoader
+
+import cheapfake.contrib.dataset as dataset
+import cheapfake.contrib.models_contrib as models
+import cheapfake.contrib.transforms as transforms
 
 __all__ = ["train_model", "eval_model"]
 
-"""
-The models are going to have to be combined with the encoder. So instead of one large CheapFake model, we can have three separate models but each of them are going to have to 
-"""
 
-
-def _find_bounding_box(landmarks, tol=(2, 2, 2, 2)):
-    """Finds the minimum bounding box containing the points, with tolerance in the left, right, top, and bottom directions (in pixels).
-
-    Parameters
-    ----------
-    landmarks : numpy.ndarray or torch.Tensor instance
-        Numpy array or Torch tensor containing the predicted xy-coordinates of the detected facial landmarks.
-    tol : tuple, optional
-        The tolerance (in pixels) in each direction (left, top, right, bottom) by default (2, 2, 2, 2). 
-    
-    Returns
-    -------
-    bbox : tuple (of ints)
-        Tuple (min_x, min_y, max_x, max_y) containing the coordinates of the bounding box, with tolerance in the left, right, top and bottom directions. 
-
-    """
-    assert isinstance(tol, tuple)
-    assert len(tol) == 4, "Need four values for the tolerance."
-
-    x_coords, y_coords = zip(*landmarks)
-    bbox = (
-        min(x_coords) - tol[0],
-        min(y_coords) - tol[1],
-        max(x_coords) + tol[2],
-        max(y_coords) + tol[3],
-    )
-    bbox = tuple([int(item) for item in bbox])
-
-    return bbox
-
-
-def _find_bounding_boxes(landmarks, tol=(2, 2, 2, 2)):
-    """Finds the minimum bounding boxes for a batch of facial landmarks.
-
-    Parameters
-    ----------
-    landmarks : numpy.ndarray or torch.Tensor instance
-        Numpy array or Torch tensor containing the xy-coordinates of the detected facial landmarks, in batches.
-    tol : tuple, optional
-        The tolerance (in pixels) in each direction (left, top, right, bottom) by default (2, 2, 2,2).
-    
-    Returns
-    -------
-    bboxes : list (of tuples)
-        List containing tuples containing the coordinates of the bounding boxes for the batch of landmarks.
-
-    """
-    bboxes = list()
-    landmarks = landmarks[:, 48:68]
-    for landmark in landmarks:
-        bboxes.append(_find_bounding_box(landmarks, tol))
-
-    return bboxes
-
-
-def _crop_lips(frames, landmarks, tol=(2, 2, 2, 2), channels_first=True):
-    """Crops the lip area from a batch of frames.
-
-    Parameters
-    ----------
-    frames : torch.Tensor instance
-        Torch tensor instance containing the frames to crop the lip areas from.
-    landmarks : numpy.ndarray or torch.Tensor instance
-        Numpy array or Torch tensor containing the xy-coordinates of the detected facial landmarks.
-    tol : tuple, optional
-        The tolerance (in pixels) in each direction (left, top, right, bottom) by default (2, 2, 2, 2).
-    channels_first : bool, optional
-        If True then the input and output are assumed to have shape (sample, channel, height, width), by default True. Otherwise the input and output are assumed to have shape (sample, height, width, channel).
-
-    Returns
-    -------
-    cropped_frames : numpy.ndarray or torch.Tensor instance
-        Numpy array or Torch tensor containing the cropped lips.
-
-    """
-    assert isinstance(frames, torch.Tensor)
-    assert isinstance(landmarks, (torch.Tensor, np.ndarray))
-    assert isinstance(tol, tuple)
-    assert isinstance(channels_first, bool)
-
-    if channels_first:
-        frames = frames.permute(0, 2, 3, 1)
-
-    bboxes = _find_bounding_boxes
-
-
-def save_checkpoints(face_model, frames_model, audio_model, description, filename):
+def save_checkpoints(face_model, frame_model, audio_model, description, filename):
     """Saves the current state of the network weights to a checkpoint file.
 
     Parameters
     ----------
     face_model : torch.nn.Module instance
         A torch.nn.Module instance containing the model weights of the face alignment/embedding network.
-    frames_model : torch.nn.Module instance
+    frame_model : torch.nn.Module instance
         A torch.nn.Module instance containing the model weights of the frames/lips embedding network
     audio_model : torch.nn.Module instance
         A torch.nn.Module instance containing the model weights of the audio embedding network.
@@ -124,7 +36,7 @@ def save_checkpoints(face_model, frames_model, audio_model, description, filenam
 
     """
     assert isinstance(face_model, torch.nn.Module)
-    assert isinstance(frames_model, torch.nn.Module)
+    assert isinstance(frame_model, torch.nn.Module)
     assert isinstance(audio_model, torch.nn.Module)
     assert isinstance(description, str)
     assert isinstance(filename, str)
@@ -132,13 +44,14 @@ def save_checkpoints(face_model, frames_model, audio_model, description, filenam
     model_state = {
         "description": description,
         "face_model": face_model.state_dict(),
-        "frames_model": frames_model.state_dict(),
+        "frame_model": frame_model.state_dict(),
         "audio_model": audio_model.state_dict(),
     }
 
     torch.save(state, filename)
 
 
+'''
 def train_model(
     face_model,
     frames_model,
@@ -220,3 +133,131 @@ def train_model(
             )
 
             # Compute the loss and then take the gradient step. Compute some verbose output if you want, especially if the user requests it.
+'''
+
+
+def train_model(
+    face_model,
+    frame_model,
+    audio_model,
+    dataloader,
+    optimizer,
+    criterion,
+    num_epochs,
+    checkpoint_path,
+    device=torch.device("cpu"),
+    verbose=True,
+):
+    """Trains the DeepFake detection model.
+
+    Parameters
+    ----------
+    face_model : torch.nn.Module instance
+        Torch module used to create the face embeddings.
+    frame_model : torch.nn.Module instance
+        Torch module used to create the lip embeddings.
+    audio_model : torch.nn.Module instance
+        Torch module used to create the audio embedddings.
+    dataloader : torch.utils.data.dataloader.DataLoader instance
+        Torch dataloader used to load the training data.
+    optimizer : torch.optim instance
+        Torch optimizer used for gradient descent.
+    num_epochs : int
+        The number of epochs for training.
+    checkpoint_path : str
+        The absolute path to the folder where checkpoints should be stored.
+    device : torch.device instance, optional
+        The device on which all procedures are carried out.
+    verbose : bool, optional
+        If True then training statistics are printed to the system console.
+
+    """
+    assert isinstance(face_model, torch.nn.Module)
+    assert isinstance(frame_model, torch.nn.Module)
+    assert isinstance(audio_model, torch.nn.Module)
+    assert isinstance(num_epochs, int)
+    assert isinstance(checkpoint_path, str)
+    assert isinstance(device, torch.device)
+    assert isinstance(verbose, bool)
+
+    face_model = face_model.to(device)
+    frame_model = frame_model.to(device)
+    audio_model = audio_model.to(device)
+
+    Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
+
+    losses = list()
+
+    if verbose is False:
+        progress_bar = tqdm(total=len(dataloader))
+    for epoch in range(num_epochs):
+        face_model.train()
+        frame_model.train()
+        audio_model.train()
+
+        for batch_idx, batch in enumerate(dataloader):
+            face_model.train()
+            frame_model.train()
+            audio_model.train()
+
+            frames, _, audio_stft = batch
+            frames = frames[:, :75]
+            frames = frames.float().to(device)
+            audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
+
+            optim.zero_grad()
+
+            landmarks, face_embeddings = face_model(frames)
+
+            extracted_lips = frame_model._crop_lips_batch(frames, landmarks)
+            extracted_lips = extracted_lips.permute(0, -1, 1, 2, 3).float().to(device)
+            frame_embeddings = frame_model(extracted_lips)
+
+            audio_embeddings = audio_model(audio_stft)
+
+            # Concatenate the embeddings together.
+            concat_embeddings = (
+                torch.cat(
+                    (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
+                    axis=1,
+                )
+                .float()
+                .to(device)
+            )
+
+            print(concat_embeddings.shape)
+
+
+if __name__ == "__main__":
+    random_seed = 41
+    metadata_path = (
+        "/home/shu/cheapfake/cheapfake/contrib/wide_balanced_metadata_fs03.csv"
+    )
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    dfdataset = dataset.DeepFakeDataset(
+        metadata_path=metadata_path,
+        frame_transform=transforms.BatchRescale(4),
+        sequential_audio=True,
+        sequential_frames=True,
+        random_seed=random_seed,
+        num_samples=2,
+    )
+    dfdataloader = DataLoader(dfdataset, batch_size=2, shuffle=True)
+    checkpoint_path = "./checkpoints"
+
+    optimizer = 0
+    criterion = 0
+    num_epochs = 5
+
+    train_model(
+        face_model=face_model,
+        frame_model=frame_model,
+        audio_model=audio_model,
+        dataloader=dfdataloader,
+        optimizer=optimizer,
+        criterion=criterion,
+        num_epochs=num_eepochs,
+        checkpoint_path=checkpoint_path,
+    )
+
