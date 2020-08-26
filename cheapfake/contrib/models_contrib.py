@@ -48,12 +48,12 @@ class FeaturesEncoder(nn.Module):
         if network_type.value == 1:
             self.conv1 = nn.Conv2d(2, 4, kernel_size=3, stride=1, padding=1)
             self.batchnorm1 = nn.BatchNorm2d(4)
-            self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=1)
+            self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
             self.conv2 = nn.Conv2d(4, 4, kernel_size=3, stride=1, padding=1)
             self.batchnorm2 = nn.BatchNorm2d(4)
-            self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=1)
+            self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
             self.flatten = nn.Flatten()
-            self.fc1 = nn.Linear(2112, 256)
+            self.fc1 = nn.Linear(4 * 17 * 18, 256)
             self.relu = nn.ReLU(inplace=True)
         elif network_type.value == 2:
             self.conv1 = torch.nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1)
@@ -63,7 +63,10 @@ class FeaturesEncoder(nn.Module):
             self.batchnorm2 = torch.nn.BatchNorm2d(25)
             self.maxpool2 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
             self.flatten = torch.nn.Flatten()
-            self.fc1 = torch.nn.Linear(25 * 18 * 128, 256)
+            self.fc1 = torch.nn.Linear(25 * 18 * 128, int((25 * 18 * 128) / 4))
+            self.fc2 = torch.nn.Linear(int((25 * 18 * 128) / 4), int((25 * 18 * 128) / 16))
+            self.fc3 = torch.nn.Linear(int((25 * 18 * 128) / 16), int((25 * 18 * 128) / 64))
+            self.fc4 = torch.nn.Linear(int((25 * 18 * 128) / 64), 256)
             self.relu = torch.nn.ReLU(inplace=True)
 
     def forward(self, x):
@@ -87,7 +90,9 @@ class FeaturesEncoder(nn.Module):
             x = self.conv2(x)
             x = self.batchnorm2(x)
             x = self.maxpool2(x)
+            print(x.shape)
             x = self.flatten(x)
+            print(x.shape)
             x = self.fc1(x)
             x = self.relu(x)
         elif self.network_type.value == 2:
@@ -99,6 +104,12 @@ class FeaturesEncoder(nn.Module):
             x = self.maxpool2(x)
             x = self.flatten(x)
             x = self.fc1(x)
+            x = self.relu(x)
+            x = self.fc2(x)
+            x = self.relu(x)
+            x = self.fc3(x)
+            x = self.relu(x)
+            x = self.fc4(x)
             x = self.relu(x)
         return x
 
@@ -184,20 +195,6 @@ class AugmentedFAN(nn.Module):
             Numpy array or Torch tensor containing the embeddings of the facial features returned by the FAN.
 
         """
-        # Need to modify this function so that it can take batches as the input.
-        '''
-        landmarks = self.face_alignment_model.get_landmarks_from_batch(x)
-        landmarks = torch.Tensor(landmarks)
-        #print(landmarks.shape)
-        landmarks = torch.squeeze(landmarks, axis=1).to(self.device)
-
-        #landmarks_permutted = landmarks.permute(0, 2, 1).float().to(self.device)
-        #landmarks_permutted = landmarks_permutted[:, :, None, :].float().to(self.device)
-        #face_embedding = self.encoder_model(landmarks_permutted)
-
-        #return landmarks, face_embedding
-        return landmarks
-        '''
         landmarks = list()
         face_embeddings = list()
         for batch in x:
@@ -208,7 +205,6 @@ class AugmentedFAN(nn.Module):
             if landmark.shape[1] != 1:
                 landmark = landmark[:, :1, :, :]
             landmarks.append(landmark)
-            #print(landmark.shape)
             landmark = landmark.permute(1, 3, 0, 2).float().to(self.device)
             #landmark = landmark[None, :, :, :].float().to(self.device)
             
@@ -315,11 +311,10 @@ class AugmentedLipNet(nn.Module):
 
         """
         x = self.lipnet_model(x)
-        x = torch.squeeze(x, axis=1)
-        #x = x.permute(0, -1, 1, 2).float().to(self.device)
-        print(x.shape)
-
+        x = x.permute(1, 0, 2)
+        x = x[None, :, :, :].permute(1, 0, 2, 3)
         lipnet_embedding = self.encoder_model(x)
+        lipnet_embedding = lipnet_embedding[:, None, :].float().to(self.device)
 
         return lipnet_embedding
 
