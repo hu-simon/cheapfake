@@ -51,6 +51,7 @@ class DeepFakeDataset(Dataset):
         frames_per_second=30,
         sample_rate=16000,
         n_seconds=3.0,
+        num_samples=None,
         channel_first=True,
         frame_transform=None,
         audio_transform=None,
@@ -79,6 +80,8 @@ class DeepFakeDataset(Dataset):
             The sample rate of the audio, by default 16 kHz. 
         n_seconds : float, optional
             The number of seconds, passed onto __getitem__(), by default 3.0 seconds.
+        num_samples : int, optional
+            The number of data samples to draw from the dataframe, by default None. 
         channel_first : {True, False}, bool, optional
             If True then all input and output are assumed to have shape ``(T, C, H, W)`` where the channel dimension comes before the spatial dimensions, by default True. Otherwise the output has shape ``(T, H, W, C)``. 
         frame_transform : callable, optional
@@ -106,6 +109,7 @@ class DeepFakeDataset(Dataset):
         assert isinstance(
             n_seconds, (float, int)
         ), "The number of seconds must be either a float or an integer."
+        assert isinstance(num_samples, int)
         assert isinstance(return_tensor, bool)
         assert isinstance(verbose, bool)
         assert isinstance(random_seed, int)
@@ -131,6 +135,7 @@ class DeepFakeDataset(Dataset):
         self.frames_per_second = frames_per_second
         self.sample_rate = sample_rate
         self.n_seconds = n_seconds
+        self.num_samples = num_samples
         self.channel_first = channel_first
 
         if frame_transform is not None:
@@ -157,18 +162,18 @@ class DeepFakeDataset(Dataset):
 
         random.seed(random_seed)
 
-        self.video_paths, self.video_labels = self._data_from_df()
+        self.video_paths, self.video_labels = self._data_from_df(num_samples=self.num_samples)
 
         # self.video_paths = self._get_video_paths(root_path=self.root_path)
 
-    def _data_from_df(self, n_samples=None):
+    def _data_from_df(self, num_samples=None):
         """Extracts the video paths and video labels (i.e. real or fake) corresponding to the data from the DFDC dataset.
 
         This function assumes that the video paths are contained in a Pandas DataFrame, under the header "File", and the video labels under the header "label"
 
         Paramters
         ---------
-        n_samples : int, optional
+        num_samples : int, optional
             The number of video paths to extract from the Pandas dataframe, by default None. If None, then all video paths are extracted.
 
         Returns
@@ -177,15 +182,15 @@ class DeepFakeDataset(Dataset):
             Pandas series containing the absolute paths to the videos.
 
         """
-        assert isinstance(n_samples, (int, type(None)))
+        assert isinstance(num_samples, (int, type(None)))
 
         df = pd.read_csv(self.metadata_path)
 
-        if n_samples is None:
-            n_samples = len(df)
+        if num_samples is None:
+            num_samples = len(df)
 
-        video_paths = df["Files"][:n_samples]
-        video_labels = df["label"][:n_samples]
+        video_paths = df["Files"][:num_samples]
+        video_labels = df["label"][:num_samples]
 
         return video_paths, video_labels
 

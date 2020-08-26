@@ -48,12 +48,12 @@ class FeaturesEncoder(nn.Module):
         if network_type.value == 1:
             self.conv1 = nn.Conv2d(2, 4, kernel_size=3, stride=1, padding=1)
             self.batchnorm1 = nn.BatchNorm2d(4)
-            self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+            self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=1)
             self.conv2 = nn.Conv2d(4, 4, kernel_size=3, stride=1, padding=1)
             self.batchnorm2 = nn.BatchNorm2d(4)
-            self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+            self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=1)
             self.flatten = nn.Flatten()
-            self.fc1 = nn.Linear(4 * 18 * 17, 256)
+            self.fc1 = nn.Linear(2112, 256)
             self.relu = nn.ReLU(inplace=True)
         elif network_type.value == 2:
             self.conv1 = torch.nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1)
@@ -138,7 +138,7 @@ class AugmentedFAN(nn.Module):
         else:
             self.landmarks_type = "2D"
 
-        if self.landmarks.type == "2D":
+        if self.landmarks_type == "2D":
             landmarks_type = face_alignment.LandmarksType._2D
         else:
             landmarks_type = face_alignment.LandmarksType._3D
@@ -163,7 +163,7 @@ class AugmentedFAN(nn.Module):
             face_detector=self.face_detector,
             verbose=self.verbose,
         )
-        self.encoder_model = FeaturesEncoder(network_type=NetworkType.face_alignment)
+        self.encoder_model = FeaturesEncoder(network_type=NetworkType.face_alignment).to(self.device)
 
     def _load_encoder_weights(self):
         pass
@@ -184,15 +184,45 @@ class AugmentedFAN(nn.Module):
             Numpy array or Torch tensor containing the embeddings of the facial features returned by the FAN.
 
         """
+        # Need to modify this function so that it can take batches as the input.
+        '''
         landmarks = self.face_alignment_model.get_landmarks_from_batch(x)
         landmarks = torch.Tensor(landmarks)
+        #print(landmarks.shape)
         landmarks = torch.squeeze(landmarks, axis=1).to(self.device)
 
-        landmarks_permutted = landmarks.permute(2, 0, 1).float().to(self.device)
-        face_embedding = self.encoder_model(landmarks_permutted)
+        #landmarks_permutted = landmarks.permute(0, 2, 1).float().to(self.device)
+        #landmarks_permutted = landmarks_permutted[:, :, None, :].float().to(self.device)
+        #face_embedding = self.encoder_model(landmarks_permutted)
 
-        return landmarks, face_embedding
-
+        #return landmarks, face_embedding
+        return landmarks
+        '''
+        landmarks = list()
+        face_embeddings = list()
+        for batch in x:
+            landmark = self.face_alignment_model.get_landmarks_from_batch(batch)
+            
+            # Compute the FAN embeddings.
+            landmark = torch.Tensor(landmark)
+            if landmark.shape[1] != 1:
+                landmark = landmark[:, :1, :, :]
+            landmarks.append(landmark)
+            #print(landmark.shape)
+            landmark = landmark.permute(1, 3, 0, 2).float().to(self.device)
+            #landmark = landmark[None, :, :, :].float().to(self.device)
+            
+            face_embedding = self.encoder_model(landmark)
+            face_embeddings.append(face_embedding)
+            
+        landmarks = torch.stack(landmarks)
+        landmarks = landmarks.squeeze(axis=2).float().to(self.device)
+        
+        face_embeddings = torch.stack(face_embeddings).float().to(self.device)
+        
+        return landmarks, face_embeddings
+        #return landmarks   
+            
 
 class AugmentedLipNet(nn.Module):
     """Augmented LipNet that includes a feature embedding network that acts on the output of LipNet.
@@ -228,7 +258,7 @@ class AugmentedLipNet(nn.Module):
         self.verbose = verbose
 
         self.lipnet_model = lipnet.LipNet(
-            dropout=self.dropout_rate, verbose=self.verbose
+            dropout_rate=self.dropout_rate, verbose=self.verbose
         ).to(self.device)
         self.encoder_model = FeaturesEncoder(network_type=NetworkType.lipnet).to(
             self.device
@@ -286,7 +316,8 @@ class AugmentedLipNet(nn.Module):
         """
         x = self.lipnet_model(x)
         x = torch.squeeze(x, axis=1)
-        x = x.permute(0, -1, 1, 2).float().to(self.device)
+        #x = x.permute(0, -1, 1, 2).float().to(self.device)
+        print(x.shape)
 
         lipnet_embedding = self.encoder_model(x)
 
