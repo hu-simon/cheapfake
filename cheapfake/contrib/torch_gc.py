@@ -4,7 +4,7 @@ Python file containing garbage-collection utilities for detecting and plugging m
 
 import gc
 import torch
-
+import numpy as np
 
 def human_readable(nbytes):
     """Converts bytes to a more human readable format, in gigabytes.
@@ -22,15 +22,20 @@ def human_readable(nbytes):
     """
     nbytes = nbytes * 1e-9
 
-    return nbytes
+    return np.around(nbytes, 2)
 
 
 def memory_report():
+    total_memory = 0
     for obj in gc.get_objects():
-        if torch.is_tensor(obj):
+        if isinstance(obj, torch.Tensor):
             print(
                 type(obj),
                 obj.size(),
-                human_readable(obj.element_size() * obj.nelement()),
+                np.around(human_readable(obj.element_size() * obj.nelement()), 2),
             )
+            total_memory += human_readable(obj.element_size() * obj.nelement())
+    total_memory = np.around(total_memory, 2)
+    print("Total memory used: {} GB".format(total_memory))
+            
 

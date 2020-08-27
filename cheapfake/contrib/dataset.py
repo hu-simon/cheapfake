@@ -301,7 +301,8 @@ class DeepFakeDataset(Dataset):
             audio, return_torch=self.return_tensor
         )
 
-        if self.return_tensor:
-            audio = torch.from_numpy(audio)
-
-        return frames, audio, audio_stft, video_label
+        #if self.return_tensor:
+        #    audio = torch.from_numpy(audio)
+        del audio
+        
+        return frames, audio_stft, video_label

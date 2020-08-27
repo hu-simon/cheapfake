@@ -11,8 +11,8 @@ import torch
 from tqdm import tqdm
 from torch.utils.data.dataloader import DataLoader
 
-import cheapfake.contrib.torch_gc
 import cheapfake.contrib.dataset as dataset
+import cheapfake.contrib.torch_gc as torch_gc
 import cheapfake.contrib.models_contrib as models
 import cheapfake.contrib.transforms as transforms
 import cheapfake.contrib.ResNetSE34L as resnet_models
@@ -196,17 +196,17 @@ def train_model(
         face_model.train()
         frame_model.train()
         audio_model.train()
-
+        
         for batch_idx, batch in enumerate(dataloader):
             face_model.train()
             frame_model.train()
             audio_model.train()
-
-            frames, _, audio_stft, label = batch
+            
+            frames, audio_stft, label = batch
             frames = frames[:, :75]
             frames = frames.float().to(device)
             audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
-
+            
             # optim.zero_grad()
 
             print("Going through FAN")
@@ -233,6 +233,15 @@ def train_model(
             # Make a memory report.
             torch_gc.memory_report()
 
+            del frames
+            del audio_stft
+            del extracted_lips
+            del face_embeddings
+            del frame_embeddings
+            del audio_embeddings
+            del concat_embeddings
+
+            torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     random_seed = 41
@@ -248,7 +257,7 @@ if __name__ == "__main__":
         sequential_audio=True,
         sequential_frames=True,
         random_seed=random_seed,
-        num_samples=1,
+        num_samples=2,
     )
     dfdataloader = DataLoader(dfdataset, batch_size=1, shuffle=True)
     checkpoint_path = "./checkpoints"
