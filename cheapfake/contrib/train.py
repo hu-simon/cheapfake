@@ -11,6 +11,7 @@ import torch
 from tqdm import tqdm
 from torch.utils.data.dataloader import DataLoader
 
+import cheapfake.contrib.torch_gc
 import cheapfake.contrib.dataset as dataset
 import cheapfake.contrib.models_contrib as models
 import cheapfake.contrib.transforms as transforms
@@ -181,9 +182,9 @@ def train_model(
     assert isinstance(device, torch.device)
     assert isinstance(verbose, bool)
 
-    #face_model = face_model.to(device)
-    #frame_model = frame_model.to(device)
-    #audio_model = audio_model.to(device)
+    # face_model = face_model.to(device)
+    # frame_model = frame_model.to(device)
+    # audio_model = audio_model.to(device)
 
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
 
@@ -195,7 +196,7 @@ def train_model(
         face_model.train()
         frame_model.train()
         audio_model.train()
-        
+
         for batch_idx, batch in enumerate(dataloader):
             face_model.train()
             frame_model.train()
@@ -206,16 +207,16 @@ def train_model(
             frames = frames.float().to(device)
             audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
 
-            #optim.zero_grad()
-            
+            # optim.zero_grad()
+
             print("Going through FAN")
             landmarks, face_embeddings = face_model(frames)
-            
+
             print("Going through LipNet")
             extracted_lips = models.AugmentedLipNet._crop_lips_batch(frames, landmarks)
             extracted_lips = extracted_lips.permute(0, -1, 1, 2, 3).float().to(device)
             frame_embeddings = frame_model(extracted_lips)
-            
+
             print("Going through ResNet")
             audio_embeddings = audio_model(audio_stft)
 
@@ -229,7 +230,8 @@ def train_model(
                 .to(device)
             )
 
-            print(concat_embeddings.shape)
+            # Make a memory report.
+            torch_gc.memory_report()
 
 
 if __name__ == "__main__":
@@ -268,6 +270,6 @@ if __name__ == "__main__":
         criterion=criterion,
         num_epochs=num_epochs,
         checkpoint_path=checkpoint_path,
-        device=device
+        device=device,
     )
 
