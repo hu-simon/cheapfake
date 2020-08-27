@@ -204,7 +204,9 @@ class AugmentedFAN(nn.Module):
         landmarks = list()
         face_embeddings = list()
         for batch in x:
-            landmark = self.face_alignment_model.get_landmarks_from_batch(batch.to(self.device))
+            landmark = self.face_alignment_model.get_landmarks_from_batch(
+                batch.to(self.device)
+            )
 
             # Compute the FAN embeddings.
             landmark = torch.Tensor(landmark)
@@ -409,7 +411,9 @@ class AugmentedLipNet(nn.Module):
         if channels_first:
             frames = frames.permute(0, 2, 3, 1)
 
-        bboxes = AugmentedLipNet._find_bounding_box_batch(batch_landmarks=landmarks, tol=tol)
+        bboxes = AugmentedLipNet._find_bounding_box_batch(
+            batch_landmarks=landmarks, tol=tol
+        )
 
         output_shape = (frames.shape[0], 64, 128, 3)
         extracted_lips = torch.empty(output_shape)
@@ -523,3 +527,75 @@ class AugmentedResNetSE34L(nn.Module):
         x = self.resnet_model(x)
 
         return x
+
+
+class MultimodalClassifier(nn.Module):
+    """Implementation of the Multimodal Classifier network.
+
+    """
+
+    def __init__(self, device=torch.device("cpu"), verbose=True):
+        """Instantiates a new MultimodalClassifier object.
+
+        Parameters
+        ----------
+        device : torch.device instance
+            The device on which all procedures are carried out, by default torch.device("cpu").
+        verbose : bool, optional
+            If True then verbose output is printed to the system console.
+
+        """
+        super(MultimodalClassifier, self).__init__()
+
+        assert isinstance(device, torch.device)
+        assert isinstance(verbose, bool)
+
+        self.device = device
+        self.verbose = verbose
+
+        # Build the network. Expected input is (batch_size, 3, 1, 256).
+        self.conv1 = nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=1)
+        self.batchnorm1 = nn.BatchNorm2d(5)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv2 = nn.Conv2d(5, 5, kernel_size=3, stride=1, padding=1)
+        self.batchnorm2 = nn.BatchNorm2d(5)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.flatten()
+        self.fc1 = nn.Linear(5 * 1 * 64, 256)
+        self.fc2 = nn.Linear(256, 64)
+        self.fc3 = nn.Linear(64, 2)
+        self.relu = nn.ReLU(inplace=True)
+        self.softmax = nn.Softmax()
+
+    def forward(self, x):
+        """Performs a forward pass of the input ``x`` through the network.
+
+        Parameters
+        ----------
+        x : torch.Tensor instance
+            Torch tensor containing the input to the network.
+        
+        Returns
+        -------
+        prediction : torch.Tensor instance
+            Class label representing whether the video is real or fake.
+        
+        """
+        x = self.conv1(x)
+        x = self.batchnorm1(x)
+        x = self.maxpool1(x)
+        x = self.conv2(x)
+        x = self.batchnorm2(x)
+        x = self.maxpool2(x)
+        x = self.flatten(x)
+        x = self.relu(x)
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        x = self.relu(x)
+
+        prediction = self.softmax(x)
+
+        return prediction

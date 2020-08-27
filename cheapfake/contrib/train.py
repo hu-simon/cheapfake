@@ -186,6 +186,8 @@ def train_model(
     # frame_model = frame_model.to(device)
     # audio_model = audio_model.to(device)
 
+    combination_model = models.MultimodalClassifier(device=device, verbose=verbose)
+
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
 
     losses = list()
@@ -196,17 +198,19 @@ def train_model(
         face_model.train()
         frame_model.train()
         audio_model.train()
-        
+        combination_model.train()
+
         for batch_idx, batch in enumerate(dataloader):
             face_model.train()
             frame_model.train()
             audio_model.train()
-            
+            combination_model.train()
+
             frames, audio_stft, label = batch
             frames = frames[:, :75]
             frames = frames.float().to(device)
             audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
-            
+
             # optim.zero_grad()
 
             print("Going through FAN")
@@ -229,9 +233,12 @@ def train_model(
                 .float()
                 .to(device)
             )
+            prediction = combination_model(concat_embeddings)
+
+            print(prediction, label)
 
             # Make a memory report.
-            torch_gc.memory_report()
+            # torch_gc.memory_report()
 
             del frames
             del audio_stft
@@ -242,6 +249,7 @@ def train_model(
             del concat_embeddings
 
             torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     random_seed = 41
