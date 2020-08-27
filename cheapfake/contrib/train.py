@@ -14,6 +14,7 @@ from torch.utils.data.dataloader import DataLoader
 import cheapfake.contrib.dataset as dataset
 import cheapfake.contrib.models_contrib as models
 import cheapfake.contrib.transforms as transforms
+import cheapfake.contrib.ResNetSE34L as resnet_models
 
 __all__ = ["train_model", "eval_model"]
 
@@ -180,9 +181,9 @@ def train_model(
     assert isinstance(device, torch.device)
     assert isinstance(verbose, bool)
 
-    face_model = face_model.to(device)
-    frame_model = frame_model.to(device)
-    audio_model = audio_model.to(device)
+    #face_model = face_model.to(device)
+    #frame_model = frame_model.to(device)
+    #audio_model = audio_model.to(device)
 
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
 
@@ -194,25 +195,28 @@ def train_model(
         face_model.train()
         frame_model.train()
         audio_model.train()
-
+        
         for batch_idx, batch in enumerate(dataloader):
             face_model.train()
             frame_model.train()
             audio_model.train()
 
-            frames, _, audio_stft = batch
+            frames, _, audio_stft, label = batch
             frames = frames[:, :75]
             frames = frames.float().to(device)
             audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
 
-            optim.zero_grad()
-
+            #optim.zero_grad()
+            
+            print("Going through FAN")
             landmarks, face_embeddings = face_model(frames)
-
-            extracted_lips = frame_model._crop_lips_batch(frames, landmarks)
+            
+            print("Going through LipNet")
+            extracted_lips = models.AugmentedLipNet._crop_lips_batch(frames, landmarks)
             extracted_lips = extracted_lips.permute(0, -1, 1, 2, 3).float().to(device)
             frame_embeddings = frame_model(extracted_lips)
-
+            
+            print("Going through ResNet")
             audio_embeddings = audio_model(audio_stft)
 
             # Concatenate the embeddings together.
@@ -234,6 +238,7 @@ if __name__ == "__main__":
         "/home/shu/cheapfake/cheapfake/contrib/wide_balanced_metadata_fs03.csv"
     )
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("Using device: {}".format(device))
 
     dfdataset = dataset.DeepFakeDataset(
         metadata_path=metadata_path,
@@ -241,14 +246,18 @@ if __name__ == "__main__":
         sequential_audio=True,
         sequential_frames=True,
         random_seed=random_seed,
-        num_samples=2,
+        num_samples=1,
     )
-    dfdataloader = DataLoader(dfdataset, batch_size=2, shuffle=True)
+    dfdataloader = DataLoader(dfdataset, batch_size=1, shuffle=True)
     checkpoint_path = "./checkpoints"
 
     optimizer = 0
     criterion = 0
     num_epochs = 5
+
+    face_model = models.AugmentedFAN(device=device)
+    frame_model = models.AugmentedLipNet(device=device)
+    audio_model = models.AugmentedResNetSE34L(device=device)
 
     train_model(
         face_model=face_model,
@@ -257,7 +266,8 @@ if __name__ == "__main__":
         dataloader=dfdataloader,
         optimizer=optimizer,
         criterion=criterion,
-        num_epochs=num_eepochs,
+        num_epochs=num_epochs,
         checkpoint_path=checkpoint_path,
+        device=device
     )
 

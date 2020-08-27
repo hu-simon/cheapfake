@@ -8,11 +8,13 @@ import os
 import time
 import enum
 
+import cv2
 import torch
 import face_alignment
 import torch.nn as nn
 import torch.nn.functional as F
 
+import cheapfake.contrib.ResNetSE34L as audio_model
 import cheapfake.lipnet.models as lipnet
 
 lipnet_options = __import__("lipnet_config")
@@ -94,9 +96,7 @@ class FeaturesEncoder(nn.Module):
             x = self.conv2(x)
             x = self.batchnorm2(x)
             x = self.maxpool2(x)
-            print(x.shape)
             x = self.flatten(x)
-            print(x.shape)
             x = self.fc1(x)
             x = self.relu(x)
         elif self.network_type.value == 2:
@@ -204,7 +204,7 @@ class AugmentedFAN(nn.Module):
         landmarks = list()
         face_embeddings = list()
         for batch in x:
-            landmark = self.face_alignment_model.get_landmarks_from_batch(batch)
+            landmark = self.face_alignment_model.get_landmarks_from_batch(batch.to(self.device))
 
             # Compute the FAN embeddings.
             landmark = torch.Tensor(landmark)
@@ -214,7 +214,7 @@ class AugmentedFAN(nn.Module):
             landmark = landmark.permute(1, 3, 0, 2).float().to(self.device)
             # landmark = landmark[None, :, :, :].float().to(self.device)
 
-            face_embedding = self.encoder_model(landmark)
+            face_embedding = self.encoder_model(landmark.to(self.device))
             face_embeddings.append(face_embedding)
 
         landmarks = torch.stack(landmarks)
@@ -349,7 +349,7 @@ class AugmentedLipNet(nn.Module):
             min(x_coords) - tol[0],
             min(y_coords) - tol[1],
             max(x_coords) + tol[2],
-            max(y_coords) + tol[2],
+            max(y_coords) + tol[3],
         )
         bbox = tuple([int(item) for item in bbox])
 
@@ -374,10 +374,10 @@ class AugmentedLipNet(nn.Module):
             List containing tuples of xy-coordinates of the bounding boxes for the batch of facial landmarks.
         
         """
-        batch_bbox = [None] * batch_landmarks.shape[0]
+        batch_bbox = list()
         batch_landmarks = batch_landmarks[:, 48:68]
         for landmark in batch_landmarks:
-            batch_bbox.append(_find_bounding_box(landmark, tol))
+            batch_bbox.append(AugmentedLipNet._find_bounding_box(landmark, tol))
 
         return batch_bbox
 
@@ -409,7 +409,7 @@ class AugmentedLipNet(nn.Module):
         if channels_first:
             frames = frames.permute(0, 2, 3, 1)
 
-        bboxes = _find_bounding_box(landmarks=landmarks, tol=tol)
+        bboxes = AugmentedLipNet._find_bounding_box_batch(batch_landmarks=landmarks, tol=tol)
 
         output_shape = (frames.shape[0], 64, 128, 3)
         extracted_lips = torch.empty(output_shape)
@@ -463,7 +463,8 @@ class AugmentedLipNet(nn.Module):
         )
         batch_extracted_lips = torch.empty(output_shape)
         for idx, (frames, landmarks) in enumerate(zip(batch_frames, batch_landmarks)):
-            batch_extracted_lips[idx] = _crop_lips(
+            print(landmarks.shape)
+            batch_extracted_lips[idx] = AugmentedLipNet._crop_lips(
                 frames, landmarks, tol=tol, channels_first=channels_first
             )
 
@@ -500,7 +501,8 @@ class AugmentedResNetSE34L(nn.Module):
         self.device = device
         self.verbose = verbose
 
-        self.resnet_model = mmid.audio_models.ResNetSE34L(nOut=num_out).to(self.device)
+        self.resnet_model = audio_model.ResNetSE34L(nOut=num_out)
+        self.resnet_model = self.resnet_model.to(device)
 
         # No encoder model for now...
 
