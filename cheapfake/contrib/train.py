@@ -187,6 +187,7 @@ def train_model(
     # audio_model = audio_model.to(device)
 
     combination_model = models.MultimodalClassifier(device=device, verbose=verbose)
+    combination_model.to(device)
 
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
 
@@ -230,9 +231,10 @@ def train_model(
                     (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
                     axis=1,
                 )
-                .float()
-                .to(device)
             )
+            concat_embeddings = concat_embeddings[:, :, None, :].float().to(device)
+            print(concat_embeddings.shape)
+            print("Going through classification network.")
             prediction = combination_model(concat_embeddings)
 
             print(prediction, label)

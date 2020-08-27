@@ -467,7 +467,7 @@ class AugmentedLipNet(nn.Module):
         )
         batch_extracted_lips = torch.empty(output_shape)
         for idx, (frames, landmarks) in enumerate(zip(batch_frames, batch_landmarks)):
-            print(landmarks.shape)
+            #print(landmarks.shape)
             batch_extracted_lips[idx] = AugmentedLipNet._crop_lips(
                 frames, landmarks, tol=tol, channels_first=channels_first
             )
@@ -554,16 +554,16 @@ class MultimodalClassifier(nn.Module):
         self.verbose = verbose
 
         # Build the network. Expected input is (batch_size, 3, 1, 256).
-        self.conv1 = nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=1)
-        self.batchnorm1 = nn.BatchNorm2d(5)
-        self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(5, 5, kernel_size=3, stride=1, padding=1)
-        self.batchnorm2 = nn.BatchNorm2d(5)
-        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.flatten()
-        self.fc1 = nn.Linear(5 * 1 * 64, 256)
-        self.fc2 = nn.Linear(256, 64)
-        self.fc3 = nn.Linear(64, 2)
+        self.conv1 = nn.Conv2d(3, 4, kernel_size=3, stride=1, padding=1)
+        self.batchnorm1 = nn.BatchNorm2d(4)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=1, stride=2)
+        self.conv2 = nn.Conv2d(4, 4, kernel_size=3, stride=2, padding=1)
+        self.batchnorm2 = nn.BatchNorm2d(4)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=1, stride=2)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(128, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.fc3 = nn.Linear(32, 2) 
         self.relu = nn.ReLU(inplace=True)
         self.softmax = nn.Softmax()
 
@@ -588,6 +588,7 @@ class MultimodalClassifier(nn.Module):
         x = self.batchnorm2(x)
         x = self.maxpool2(x)
         x = self.flatten(x)
+        print(x.shape)
         x = self.relu(x)
         x = self.fc1(x)
         x = self.relu(x)
