@@ -15,7 +15,6 @@ import random
 import cv2
 import glob
 import torch
-import librosa
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
@@ -109,7 +108,7 @@ class DeepFakeDataset(Dataset):
         assert isinstance(
             n_seconds, (float, int)
         ), "The number of seconds must be either a float or an integer."
-        assert isinstance(num_samples, int)
+        assert isinstance(num_samples, (int, type(None)))
         assert isinstance(return_tensor, bool)
         assert isinstance(verbose, bool)
         assert isinstance(random_seed, int)
@@ -162,7 +161,9 @@ class DeepFakeDataset(Dataset):
 
         random.seed(random_seed)
 
-        self.video_paths, self.video_labels = self._data_from_df(num_samples=self.num_samples)
+        self.video_paths, self.video_labels = self._data_from_df(
+            num_samples=self.num_samples
+        )
 
         # self.video_paths = self._get_video_paths(root_path=self.root_path)
 
@@ -272,7 +273,10 @@ class DeepFakeDataset(Dataset):
 
         """
         video_path = self.video_paths[index]
+
         video_label = self.video_labels[index]
+        video_label = torch.tensor(video_label)
+        video_label = torch.nn.functional.one_hot(video_label, num_classes=2).float()
 
         frames = self.videofile_processor.extract_all_frames(video_path=video_path)
         audio = self.videofile_processor._extract_all_audio(video_path=video_path)
@@ -301,8 +305,8 @@ class DeepFakeDataset(Dataset):
             audio, return_torch=self.return_tensor
         )
 
-        #if self.return_tensor:
+        # if self.return_tensor:
         #    audio = torch.from_numpy(audio)
         del audio
-        
+
         return frames, audio_stft, video_label

@@ -9,6 +9,7 @@ from pathlib import Path
 import cv2
 import torch
 from tqdm import tqdm
+import torch.optim as optim
 from torch.utils.data.dataloader import DataLoader
 
 import cheapfake.contrib.dataset as dataset
@@ -53,91 +54,6 @@ def save_checkpoints(face_model, frame_model, audio_model, description, filename
     torch.save(state, filename)
 
 
-'''
-def train_model(
-    face_model,
-    frames_model,
-    audio_model,
-    dataloader,
-    optimizer,
-    criterion,
-    num_epochs,
-    device=torch.device("cpu"),
-    verbose=True,
-):
-    """Trains the DeepFake detection model.
-
-    Parameters
-    ----------
-    face_model : torch.nn.Module instance
-        A torch.nn.Module instance used to create the face embeddings.
-    frames_model : torch.nn.Module instance
-        A torch.nn.Module instance used to create the frames/lips embeddings.
-    audio_model : torch.nn.Module instance
-        A torch.nn.Module instance used to create the audio embeddings.
-    dataloader : torch.utils.data.dataloader.DataLoader instance
-        Torch dataloader used for loading the training data.
-    optimizer : torch.optim instance
-        Torch optimizer function used for gradient descent.
-    criterion : torch.nn Loss Function instance
-        A torch.nn loss function used for gradient descent.
-    num_epochs : int
-        The number of epochs for training.
-    device : torch.device instance
-        The device on which all the computations are done.
-    verbose : {True, False}, bool, optional
-        If True, then training statistics are printed to the system console.
-    
-    """
-    assert isinstance(frame_model, torch.nn.Module)
-    assert isinstance(lip_model, torch.nn.Module)
-    assert isinstance(audio_model, torch.nn.Module)
-    assert isinstance(device, torch.device)
-    assert isinstance(verbose, bool)
-
-    frame_model = frame_model.to(device)
-    lip_model = lip_model.to(device)
-    audio_model = audio_model.to(device)
-
-    checkpoint_path = "./checkpoints"
-    Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
-
-    losses = list()
-
-    if verbose is False:
-        progress_bar = tqdm(total=len(dataloader))
-    for epoch in range(n_epochs):
-        face_model.train()
-        frames_model.train()
-        audio_model.train()
-
-        for batch_idx, batch in enumerate(dataloader):
-            frames, _, audio_stft = batch
-
-            frames = frames.float().to(device)
-            audio_stft = audio_stft.float().to(device)
-
-            face_model.train()
-            frames_model.train()
-            audio_model.train()
-
-            optim.zero_grad()
-
-            landmarks, face_embedding = face_model(frames)
-            extracted_lips = _crop_lips(frames, landmarks)
-            frame_embedding = frames_model(extracted_lips)
-            audio_embedding = audio_model(audio_stft.view(audio_stft.shape[0], -1))
-
-            print(
-                "\nFace Embedding Size: {}\nFrames Embedding Size: {}\nAudio Embedding Size: {}".format(
-                    face_embedding.shape, frame_embedding.shape, audio_embedding.shape
-                )
-            )
-
-            # Compute the loss and then take the gradient step. Compute some verbose output if you want, especially if the user requests it.
-'''
-
-
 def train_model(
     face_model,
     frame_model,
@@ -148,7 +64,7 @@ def train_model(
     num_epochs,
     checkpoint_path,
     device=torch.device("cpu"),
-    verbose=True,
+    verbose=False,
 ):
     """Trains the DeepFake detection model.
 
@@ -182,10 +98,6 @@ def train_model(
     assert isinstance(device, torch.device)
     assert isinstance(verbose, bool)
 
-    # face_model = face_model.to(device)
-    # frame_model = frame_model.to(device)
-    # audio_model = audio_model.to(device)
-
     combination_model = models.MultimodalClassifier(device=device, verbose=verbose)
     combination_model.to(device)
 
@@ -212,8 +124,6 @@ def train_model(
             frames = frames.float().to(device)
             audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
 
-            # optim.zero_grad()
-
             print("Going through FAN")
             landmarks, face_embeddings = face_model(frames)
 
@@ -226,18 +136,27 @@ def train_model(
             audio_embeddings = audio_model(audio_stft)
 
             # Concatenate the embeddings together.
-            concat_embeddings = (
-                torch.cat(
-                    (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
-                    axis=1,
-                )
+            concat_embeddings = torch.cat(
+                (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
+                axis=1,
             )
             concat_embeddings = concat_embeddings[:, :, None, :].float().to(device)
             print(concat_embeddings.shape)
             print("Going through classification network.")
             prediction = combination_model(concat_embeddings)
 
-            print(prediction, label)
+            optim.zero_grad()
+
+            loss = criterion(prediction, label)
+            loss.backward()
+
+            optim.step()
+            losses.append(loss.item())
+
+            if verbose:
+                pass
+            else:
+                pbar.update(1)
 
             # Make a memory report.
             # torch_gc.memory_report()
@@ -251,6 +170,12 @@ def train_model(
             del concat_embeddings
 
             torch.cuda.empty_cache()
+
+        if verbose is False:
+            pbar.refresh()
+            pbar.reset()
+
+    pbar.close()
 
 
 if __name__ == "__main__":
@@ -272,13 +197,18 @@ if __name__ == "__main__":
     dfdataloader = DataLoader(dfdataset, batch_size=1, shuffle=True)
     checkpoint_path = "./checkpoints"
 
-    optimizer = 0
-    criterion = 0
-    num_epochs = 5
-
     face_model = models.AugmentedFAN(device=device)
     frame_model = models.AugmentedLipNet(device=device)
     audio_model = models.AugmentedResNetSE34L(device=device)
+
+    params_list = (
+        list(face_model.parameters())
+        + list(frame_model.parameters())
+        + list(audio_model.parameters())
+    )
+    optimizer = optim.SGD(params_list, lr=0.01)
+    criterion = nn.BCELoss()
+    num_epochs = 5
 
     train_model(
         face_model=face_model,
