@@ -117,68 +117,69 @@ def train_model(
         frame_model.train()
         audio_model.train()
         combination_model.train()
+        
+        try:
+            for batch_idx, batch in enumerate(dataloader):
+                face_model.train()
+                frame_model.train()
+                audio_model.train()
+                combination_model.train()
 
-        for batch_idx, batch in enumerate(dataloader):
-            face_model.train()
-            frame_model.train()
-            audio_model.train()
-            combination_model.train()
+                frames, audio_stft, label = batch
+                frames = frames[:, :75]
+                frames = frames.float().to(device)
+                audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
+                label = label.to(device)
 
-            frames, audio_stft, label = batch
-            frames = frames[:, :75]
-            frames = frames.float().to(device)
-            audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
-            label = label.to(device)
-
-            #print("Going through FAN")
-            try:
-                landmarks, face_embeddings = face_model(frames)
+                #print("Going through FAN")
+                try:
+                    landmarks, face_embeddings = face_model(frames)
             
-                #print("Going through LipNet")
-                extracted_lips = models.AugmentedLipNet._crop_lips_batch(frames, landmarks)
-                extracted_lips = extracted_lips.permute(0, -1, 1, 2, 3).float().to(device)
-                frame_embeddings = frame_model(extracted_lips)
+                    #print("Going through LipNet")
+                    extracted_lips = models.AugmentedLipNet._crop_lips_batch(frames, landmarks)
+                    extracted_lips = extracted_lips.permute(0, -1, 1, 2, 3).float().to(device)
+                    frame_embeddings = frame_model(extracted_lips)
 
-                #print("Going through ResNet")
-                audio_embeddings = audio_model(audio_stft)
+                    #print("Going through ResNet")
+                    audio_embeddings = audio_model(audio_stft)
 
-                # Concatenate the embeddings together.
-                concat_embeddings = torch.cat(
-                    (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
-                    axis=1,
-                )
-                concat_embeddings = concat_embeddings[:, :, None, :].float().to(device)
-                #print(concat_embeddings.shape)
-                #print("Going through classification network.")
-                prediction = combination_model(concat_embeddings)
+                    # Concatenate the embeddings together.
+                    concat_embeddings = torch.cat(
+                        (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
+                        axis=1,
+                    )
+                    concat_embeddings = concat_embeddings[:, :, None, :].float().to(device)
+                    #print(concat_embeddings.shape)
+                    #print("Going through classification network.")
+                    prediction = combination_model(concat_embeddings)
             
-                del frames
-                del audio_stft
-                del extracted_lips
-                del face_embeddings
-                del frame_embeddings
-                del audio_embeddings
-                del concat_embeddings
+                    del frames
+                    del audio_stft
+                    del extracted_lips
+                    del face_embeddings
+                    del frame_embeddings
+                    del audio_embeddings
+                    del concat_embeddings
 
-                torch.cuda.empty_cache()
+                    torch.cuda.empty_cache()
 
-                optimizer.zero_grad()
+                    optimizer.zero_grad()
 
-                loss = criterion(prediction, label)
-                loss.backward()
+                    loss = criterion(prediction, label)
+                    loss.backward()
 
-                optimizer.step()
-                losses.append(loss.item())
+                    optimizer.step()
+                    losses.append(loss.item())
 
-            except (ValueError, TypeError):
-                print("No landmarks or detected")
-                pass
-            finally:
-                if verbose:
+                except (ValueError, TypeError):
+                    print("No landmarks or detected")
                     pass
-                else:
-                    progress_bar.update(1)
-                torch.cuda.empty_cache()
+                finally:
+                    if verbose:
+                        pass
+                    else:
+                        progress_bar.update(1)
+                    torch.cuda.empty_cache()
 
             # Make a memory report.
             # torch_gc.memory_report()
@@ -192,6 +193,9 @@ def train_model(
             #del concat_embeddings
 
             #torch.cuda.empty_cache()
+        except:
+            print("Skipping video.")
+            pass
 
         if verbose is False:
             print("".join("-" * 80))
