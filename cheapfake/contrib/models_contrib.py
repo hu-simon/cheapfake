@@ -50,29 +50,29 @@ class FeaturesEncoder(nn.Module):
         if network_type.value == 1:
             self.conv1 = nn.Conv2d(2, 4, kernel_size=3, stride=1, padding=1)
             self.batchnorm1 = nn.BatchNorm2d(4)
-            self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-            self.conv2 = nn.Conv2d(4, 4, kernel_size=3, stride=1, padding=1)
-            self.batchnorm2 = nn.BatchNorm2d(4)
-            self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+            self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=4)
+            #self.conv2 = nn.Conv2d(4, 4, kernel_size=3, stride=1, padding=1)
+            #self.batchnorm2 = nn.BatchNorm2d(4)
+            #self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
             self.flatten = nn.Flatten()
-            self.fc1 = nn.Linear(4 * 17 * 18, 256)
+            self.fc1 = nn.Linear(1292, 256)
             self.relu = nn.ReLU(inplace=True)
         elif network_type.value == 2:
-            self.conv1 = torch.nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1)
-            self.batchnorm1 = torch.nn.BatchNorm2d(16)
-            self.maxpool1 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
-            self.conv2 = torch.nn.Conv2d(16, 25, kernel_size=3, stride=1, padding=1)
-            self.batchnorm2 = torch.nn.BatchNorm2d(25)
-            self.maxpool2 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+            self.conv1 = torch.nn.Conv2d(1, 4, kernel_size=3, stride=1, padding=1)
+            self.batchnorm1 = torch.nn.BatchNorm2d(4)
+            self.maxpool1 = torch.nn.MaxPool2d(kernel_size=3, stride=4)
+            #self.conv2 = torch.nn.Conv2d(16, 25, kernel_size=3, stride=1, padding=1)
+            #self.batchnorm2 = torch.nn.BatchNorm2d(25)
+            #self.maxpool2 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
             self.flatten = torch.nn.Flatten()
-            self.fc1 = torch.nn.Linear(25 * 18 * 128, int((25 * 18 * 128) / 4))
-            self.fc2 = torch.nn.Linear(
-                int((25 * 18 * 128) / 4), int((25 * 18 * 128) / 16)
-            )
-            self.fc3 = torch.nn.Linear(
-                int((25 * 18 * 128) / 16), int((25 * 18 * 128) / 64)
-            )
-            self.fc4 = torch.nn.Linear(int((25 * 18 * 128) / 64), 256)
+            self.fc1 = torch.nn.Linear(9728, 256)
+            #self.fc2 = torch.nn.Linear(
+            #    int((25 * 18 * 128) / 4), int((25 * 18 * 128) / 16)
+            #)
+            #self.fc3 = torch.nn.Linear(
+            #    int((25 * 18 * 128) / 16), int((25 * 18 * 128) / 64)
+            #)
+            #self.fc4 = torch.nn.Linear(int((25 * 18 * 128) / 64), 256)
             self.relu = torch.nn.ReLU(inplace=True)
 
     def forward(self, x):
@@ -93,28 +93,30 @@ class FeaturesEncoder(nn.Module):
             x = self.conv1(x)
             x = self.batchnorm1(x)
             x = self.maxpool1(x)
-            x = self.conv2(x)
-            x = self.batchnorm2(x)
-            x = self.maxpool2(x)
+            #x = self.conv2(x)
+            #x = self.batchnorm2(x)
+            #x = self.maxpool2(x)
             x = self.flatten(x)
+            #print(x.shape)
             x = self.fc1(x)
             x = self.relu(x)
         elif self.network_type.value == 2:
             x = self.conv1(x)
             x = self.batchnorm1(x)
             x = self.maxpool1(x)
-            x = self.conv2(x)
-            x = self.batchnorm2(x)
-            x = self.maxpool2(x)
+            #x = self.conv2(x)
+            #x = self.batchnorm2(x)
+            #x = self.maxpool2(x)
             x = self.flatten(x)
+            #print(x.shape)
             x = self.fc1(x)
             x = self.relu(x)
-            x = self.fc2(x)
-            x = self.relu(x)
-            x = self.fc3(x)
-            x = self.relu(x)
-            x = self.fc4(x)
-            x = self.relu(x)
+            #x = self.fc2(x)
+            #x = self.relu(x)
+            #x = self.fc3(x)
+            #x = self.relu(x)
+            #x = self.fc4(x)
+            #x = self.relu(x)
         return x
 
 
@@ -209,6 +211,7 @@ class AugmentedFAN(nn.Module):
             )
 
             # Compute the FAN embeddings.
+            # Need to check for multiple landmarks before you put it in to a Torch tensor.
             landmark = torch.Tensor(landmark)
             if landmark.shape[1] != 1:
                 landmark = landmark[:, :1, :, :]
@@ -296,10 +299,10 @@ class AugmentedLipNet(nn.Module):
 
             model_dict.update(pretrained_dict)
             self.lipnet_model.load_state_dict(model_dict)
-        else:
-            print(
-                "[WARNING] Invalid path to pre-trained weights, and thus no weights will be loaded."
-            )
+        #else:
+        #    print(
+        #        "[WARNING] Invalid path to pre-trained weights, and thus no weights will be loaded."
+         #   )
 
     def _load_encoder_weights(self):
         pass
@@ -561,9 +564,9 @@ class MultimodalClassifier(nn.Module):
         self.batchnorm2 = nn.BatchNorm2d(4)
         self.maxpool2 = nn.MaxPool2d(kernel_size=1, stride=2)
         self.flatten = nn.Flatten()
-        self.fc1 = nn.Linear(128, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 2) 
+        self.fc1 = nn.Linear(128, 2)
+        #self.fc2 = nn.Linear(64, 32)
+        #self.fc3 = nn.Linear(32, 2) 
         self.relu = nn.ReLU(inplace=True)
         self.softmax = nn.Softmax()
 
@@ -588,14 +591,13 @@ class MultimodalClassifier(nn.Module):
         x = self.batchnorm2(x)
         x = self.maxpool2(x)
         x = self.flatten(x)
-        print(x.shape)
-        x = self.relu(x)
+        #x = self.relu(x)
         x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.relu(x)
-        x = self.fc3(x)
-        x = self.relu(x)
+        #x = self.relu(x)
+        #x = self.fc2(x)
+        #x = self.relu(x)
+        #x = self.fc3(x)
+        #x = self.relu(x)
 
         prediction = self.softmax(x)
 
