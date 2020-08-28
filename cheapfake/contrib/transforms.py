@@ -11,6 +11,31 @@ import torch
 import numpy as np
 
 
+class Identity(object):
+    """Implementation of the identity transformation.
+
+    """
+
+    def __init__(self):
+        pass
+
+    def __call__(self, x):
+        """Applies the identity transformation to the input ``x``.
+
+        Parameters
+        ----------
+        x : torch.Tensor or numpy.ndarray instance
+            Torch tensor or Numpy array containing the input to be transformed.
+        
+        Returns
+        -------
+        x : torch.Tensor or numpy.ndarray instance
+            Torch tensor or Numpy array containing an exact copy of the input.
+
+        """
+        return x
+
+
 class BatchRescale(object):
     """Rescales a collection of images in a given sample, to a specified size.
 
