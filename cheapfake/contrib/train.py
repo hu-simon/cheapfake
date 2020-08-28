@@ -59,7 +59,7 @@ def train_model(
     face_model,
     frame_model,
     audio_model,
-    combination_model, 
+    combination_model,
     dataloader,
     optimizer,
     criterion,
@@ -117,89 +117,76 @@ def train_model(
         frame_model.train()
         audio_model.train()
         combination_model.train()
-        
-        try:
-            for batch_idx, batch in enumerate(dataloader):
-                face_model.train()
-                frame_model.train()
-                audio_model.train()
-                combination_model.train()
 
-                frames, audio_stft, label = batch
-                frames = frames[:, :75]
-                frames = frames.float().to(device)
-                audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
-                label = label.to(device)
+        for batch_idx, batch in enumerate(dataloader):
+            face_model.train()
+            frame_model.train()
+            audio_model.train()
+            combination_model.train()
 
-                #print("Going through FAN")
-                try:
-                    landmarks, face_embeddings = face_model(frames)
-            
-                    #print("Going through LipNet")
-                    extracted_lips = models.AugmentedLipNet._crop_lips_batch(frames, landmarks)
-                    extracted_lips = extracted_lips.permute(0, -1, 1, 2, 3).float().to(device)
-                    frame_embeddings = frame_model(extracted_lips)
+            frames, audio_stft, label = batch
+            frames = frames[:, :75]
+            frames = frames.float().to(device)
+            audio_stft = audio_stft.view(audio_stft.shape[0], -1).float().to(device)
+            label = label.to(device)
 
-                    #print("Going through ResNet")
-                    audio_embeddings = audio_model(audio_stft)
+            # print("Going through FAN")
+            try:
+                landmarks, face_embeddings = face_model(frames)
 
-                    # Concatenate the embeddings together.
-                    concat_embeddings = torch.cat(
-                        (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
-                        axis=1,
-                    )
-                    concat_embeddings = concat_embeddings[:, :, None, :].float().to(device)
-                    #print(concat_embeddings.shape)
-                    #print("Going through classification network.")
-                    prediction = combination_model(concat_embeddings)
-            
-                    del frames
-                    del audio_stft
-                    del extracted_lips
-                    del face_embeddings
-                    del frame_embeddings
-                    del audio_embeddings
-                    del concat_embeddings
+                # print("Going through LipNet")
+                extracted_lips = models.AugmentedLipNet._crop_lips_batch(
+                    frames, landmarks
+                )
+                extracted_lips = (
+                    extracted_lips.permute(0, -1, 1, 2, 3).float().to(device)
+                )
+                frame_embeddings = frame_model(extracted_lips)
 
-                    torch.cuda.empty_cache()
+                # print("Going through ResNet")
+                audio_embeddings = audio_model(audio_stft)
 
-                    optimizer.zero_grad()
+                # Concatenate the embeddings together.
+                concat_embeddings = torch.cat(
+                    (face_embeddings, frame_embeddings, audio_embeddings[:, None, :]),
+                    axis=1,
+                )
+                concat_embeddings = concat_embeddings[:, :, None, :].float().to(device)
+                # print(concat_embeddings.shape)
+                # print("Going through classification network.")
+                prediction = combination_model(concat_embeddings)
 
-                    loss = criterion(prediction, label)
-                    loss.backward()
+                del frames
+                del audio_stft
+                del extracted_lips
+                del face_embeddings
+                del frame_embeddings
+                del audio_embeddings
+                del concat_embeddings
 
-                    optimizer.step()
-                    losses.append(loss.item())
+                torch.cuda.empty_cache()
 
-                except (ValueError, TypeError):
-                    print("No landmarks or detected")
+                optimizer.zero_grad()
+
+                loss = criterion(prediction, label)
+                loss.backward()
+
+                optimizer.step()
+                losses.append(loss.item())
+
+            except (ValueError, TypeError):
+                print("No landmarks or detected")
+                pass
+            finally:
+                if verbose:
                     pass
-                finally:
-                    if verbose:
-                        pass
-                    else:
-                        progress_bar.update(1)
-                    torch.cuda.empty_cache()
-
-            # Make a memory report.
-            # torch_gc.memory_report()
-
-            #del frames
-            #del audio_stft
-            #del extracted_lips
-            #del face_embeddings
-            #del frame_embeddings
-            #del audio_embeddings
-            #del concat_embeddings
-
-            #torch.cuda.empty_cache()
-        except:
-            print("Skipping video.")
-            pass
+                else:
+                    progress_bar.update(1)
+                torch.cuda.empty_cache()
 
         if verbose is False:
             print("".join("-" * 80))
-            print("Epoch {}".format(epoch+2))
+            print("Epoch {}".format(epoch + 2))
             print("".join("-" * 80))
             progress_bar.refresh()
             progress_bar.reset()
@@ -230,7 +217,7 @@ if __name__ == "__main__":
     frame_model = models.AugmentedLipNet(device=device, verbose=False)
     audio_model = models.AugmentedResNetSE34L(device=device)
     combination_model = models.MultimodalClassifier(device=device).to(device)
-    
+
     """
     # Implement data parallelism here.
     face_model = nn.DataParallel(face_model)
@@ -242,7 +229,8 @@ if __name__ == "__main__":
     params_list = (
         list(face_model.parameters())
         + list(frame_model.parameters())
-        + list(audio_model.parameters()) + list(combination_model.parameters())
+        + list(audio_model.parameters())
+        + list(combination_model.parameters())
     )
     optimizer = optim.SGD(params_list, lr=0.01)
     criterion = nn.BCELoss()
