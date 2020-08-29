@@ -208,7 +208,7 @@ if __name__ == "__main__":
         sequential_audio=True,
         sequential_frames=True,
         random_seed=random_seed,
-        num_samples=None,
+        num_samples=100,
     )
     dfdataloader = DataLoader(dfdataset, batch_size=1, shuffle=True)
     checkpoint_path = "./checkpoints"
