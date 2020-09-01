@@ -17,9 +17,12 @@ import torch.nn.functional as F
 import cheapfake.contrib.ResNetSE34L as audio_model
 import cheapfake.lipnet.models as lipnet
 
-lipnet_options = __import__("lipnet_config")
-face_alignment_options = __import__("face_alignment_config")
+# Uncomment the lines below if the files exist.
+#lipnet_options = __import__("lipnet_config")
+#face_alignment_options = __import__("face_alignment_config")
 
+# Delete the line below if the files above exist.
+face_alignment_options = 0
 
 class NetworkType(enum.Enum):
     face_alignment = 1

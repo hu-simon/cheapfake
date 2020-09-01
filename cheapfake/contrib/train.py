@@ -254,7 +254,7 @@ def train_model(
             # Save the model.
             print("Saving model weights.")
             description = "Epoch: {}, Loss: {}".format(epoch, meter.avg)
-            filename = "checkpoint_{}.pth.tar".format(epoch)
+            filename = "checkpoint_{}.pth".format(epoch)
             save_checkpoints(
                 face_model,
                 frame_model,
