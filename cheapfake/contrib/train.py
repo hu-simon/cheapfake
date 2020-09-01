@@ -44,7 +44,7 @@ def save_checkpoints(
     assert isinstance(face_model, torch.nn.Module)
     assert isinstance(frame_model, torch.nn.Module)
     assert isinstance(audio_model, torch.nn.Module)
-    assert isinstance(combination_model, toch.nn.Module)
+    assert isinstance(combination_model, torch.nn.Module)
     assert isinstance(description, str)
     assert isinstance(filename, str)
 
@@ -56,7 +56,7 @@ def save_checkpoints(
         "combination_model": combination_model.state_dict(),
     }
 
-    torch.save(state, filename)
+    torch.save(model_state, filename)
 
 
 # From Michaels' MMID code.
@@ -298,7 +298,7 @@ if __name__ == "__main__":
         random_seed=random_seed,
         num_samples=100,
     )
-    dfdataloader = DataLoader(dfdataset, batch_size=2, shuffle=True)
+    dfdataloader = DataLoader(dfdataset, batch_size=1, shuffle=True)
     checkpoint_path = "./checkpoints"
 
     face_model = models.AugmentedFAN(device=device)
@@ -335,7 +335,7 @@ if __name__ == "__main__":
         num_epochs=num_epochs,
         checkpoint_path=checkpoint_path,
         device=device,
-        save_freq=1
+        save_freq=1,
         eval_freq=1
     )
 
