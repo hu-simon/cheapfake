@@ -8,9 +8,11 @@ from pathlib import Path
 
 import cv2
 import torch
+import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
 import torch.optim as optim
+from geomloss import SamplesLoss
 from torch.utils.data.dataloader import DataLoader
 
 import cheapfake.contrib.dataset as dataset
@@ -171,10 +173,10 @@ def train_model(
     assert isinstance(device, torch.device)
     assert isinstance(verbose, bool)
 
+    criterion_type = "sinkhorn" if isinstance(criterion, type(SamplesLoss())) else "bce"
+
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
-
     losses = list()
-
     meter = AverageMeter()
 
     if verbose is False:
@@ -254,7 +256,9 @@ def train_model(
             # Save the model.
             print("Saving model weights.")
             description = "Epoch: {}, Loss: {}".format(epoch, meter.avg)
-            filename = "checkpoint_{}.pth".format(epoch)
+            filename = "{}/checkpoint_{}_{}.pth".format(
+                checkpoint_path, epoch, criterion_type
+            )
             save_checkpoints(
                 face_model,
                 frame_model,
@@ -306,14 +310,6 @@ if __name__ == "__main__":
     audio_model = models.AugmentedResNetSE34L(device=device)
     combination_model = models.MultimodalClassifier(device=device).to(device)
 
-    """
-    # Implement data parallelism here.
-    face_model = nn.DataParallel(face_model)
-    frame_model = nn.DataParallel(frame_model)
-    audio_model = nn.DataParallel(audio_model)
-    combination_model = nn.DataParallel(combination_model)
-    """
-
     params_list = (
         list(face_model.parameters())
         + list(frame_model.parameters())
@@ -321,7 +317,11 @@ if __name__ == "__main__":
         + list(combination_model.parameters())
     )
     optimizer = optim.SGD(params_list, lr=0.01)
-    criterion = nn.BCELoss()
+
+    # Uncomment the line below to train with ~Wasserstein (Sinkhorn) loss instead of BCE Loss
+    criterion = SamplesLoss(loss="sinkhorn", p=2, blur=0.05)
+    # Uncomment the line below to train with BCE loss instead of Wasserstein.
+    # criterion = nn.BCELoss()
     num_epochs = 5
 
     train_model(
@@ -336,6 +336,5 @@ if __name__ == "__main__":
         checkpoint_path=checkpoint_path,
         device=device,
         save_freq=1,
-        eval_freq=1
+        eval_freq=1,
     )
-
